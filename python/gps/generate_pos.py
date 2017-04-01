@@ -135,7 +135,7 @@ def main():
     """
     train_positions = np.array([np.array([-bas_pos, -bas_pos, 0]), np.array([bas_pos, -bas_pos, 0]),
                                # np.array([-bas_pos, bas_pos, 0]),
-                                np.array([bas_pos, bas_pos, 0]),
+                                #np.array([bas_pos, bas_pos, 0]),
                                 np.array([0.07, -0.07, 0]),  np.array([0.10, -0.10, 0]),
                                 np.array([0.15, -0.15, 0]), np.array([0.18, -0.18, 0])])
     # train_positions = np.array([np.array([0.03, -0.03, 0]), np.array([-0.03, 0.03, 0]), np.array([0.181, -0.181, 0]),

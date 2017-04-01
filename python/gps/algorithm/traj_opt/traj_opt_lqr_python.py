@@ -23,6 +23,7 @@ class TrajOptLQRPython(TrajOpt):
         config.update(hyperparams)
 
         TrajOpt.__init__(self, config)
+        self.flag_reset = False
 
     # TODO - Add arg and return spec on this function.
     def update(self, m, algorithm):
@@ -34,7 +35,7 @@ class TrajOptLQRPython(TrajOpt):
 
         if type(algorithm) == AlgorithmMDGPS:
             # For MDGPS, constrain to previous NN linearization
-            prev_traj_distr = algorithm.cur[m].pol_info.traj_distr()
+            prev_traj_distr = algorithm.cnur[m].pol_info.traj_distr()
         else:
             # For BADMM/trajopt, constrain to previous LG controller
             prev_traj_distr = algorithm.cur[m].traj_distr
@@ -75,12 +76,19 @@ class TrajOptLQRPython(TrajOpt):
                 new_eta = max(geom, 0.1*max_eta)
                 LOGGER.debug("KL: %f / %f, eta too big, new eta: %f",
                         kl_div, kl_step, new_eta)
+                if new_eta > 10000:
+                    self.flag_reset = True
+                    break
+
             else: # Eta was too small.
                 min_eta = eta
                 geom = np.sqrt(min_eta*max_eta)  # Geometric mean.
                 new_eta = min(geom, 10.0*min_eta)
                 LOGGER.debug("KL: %f / %f, eta too small, new eta: %f",
                         kl_div, kl_step, new_eta)
+                if new_eta > 10000:
+                    self.flag_reset = True
+                    break
 
             # Logarithmic mean: log_mean(x,y) = (y - x)/(log(y) - log(x))
             eta = new_eta
@@ -105,10 +113,24 @@ class TrajOptLQRPython(TrajOpt):
         # Compute cost.
         predicted_cost = np.zeros(T)
         for t in range(T):
-            predicted_cost[t] = traj_info.cc[t] + 0.5 * \
-                    np.sum(sigma[t, :, :] * traj_info.Cm[t, :, :]) + 0.5 * \
-                    mu[t, :].T.dot(traj_info.Cm[t, :, :]).dot(mu[t, :]) + \
-                    mu[t, :].T.dot(traj_info.cv[t, :])
+            # predicted_cost[t] = traj_info.cc[t] + 0.5 * \
+            #         np.sum(sigma[t, :, :] * traj_info.Cm[t, :, :]) + 0.5 * \
+            #         mu[t, :].T.dot(traj_info.Cm[t, :, :]).dot(mu[t, :]) + \
+            #         mu[t, :].T.dot(traj_info.cv[t, :])
+            temp1 = traj_info.cc[t]
+            """
+            temp2 will grow infinite
+            and then
+            temp3
+            """
+            temp2 = 0.5 * np.sum(sigma[t, :, :] * traj_info.Cm[t, :, :])
+            temp3 = 0.5 * mu[t, :].T.dot(traj_info.Cm[t, :, :]).dot(mu[t, :])
+            temp4 = mu[t, :].T.dot(traj_info.cv[t, :])
+            # temp = traj_info.cc[t] + 0.5 * \
+            #           np.sum(sigma[t, :, :] * traj_info.Cm[t, :, :]) + 0.5 * \
+            #           mu[t, :].T.dot(traj_info.Cm[t, :, :]).dot(mu[t, :]) + \
+            #           mu[t, :].T.dot(traj_info.cv[t, :])
+            predicted_cost[t] = temp1 + temp2 + temp3 + temp4
         return predicted_cost
 
     def forward(self, traj_distr, traj_info):

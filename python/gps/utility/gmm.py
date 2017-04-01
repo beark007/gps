@@ -86,8 +86,10 @@ class GMM(object):
         mu = np.sum(self.mu * wts, axis=0)
 
         # Compute overall covariance.
+        # For some reason this version works way better than the "right"
+        # one... could we be computing xxt wrong?
         diff = self.mu - np.expand_dims(mu, axis=0)
-        diff_expand = np.expand_dims(self.mu, axis=1) * \
+        diff_expand = np.expand_dims(diff, axis=1) * \
                 np.expand_dims(diff, axis=2)
         wts_expand = np.expand_dims(wts, axis=2)
         sigma = np.sum((self.sigma + diff_expand) * wts_expand, axis=0)
@@ -153,7 +155,7 @@ class GMM(object):
         prevll = -float('inf')
         for itr in range(max_iterations):
             # E-step: compute cluster probabilities.
-            logobs = self.estep(data)
+            logobs = self.estep(data) # N * K
 
             # Compute log-likelihood.
             ll = np.sum(logsum(logobs, axis=1))
@@ -170,6 +172,7 @@ class GMM(object):
                 break
             prevll = ll
 
+            # this will be normalize in exp(logw)
             # Renormalize to get cluster weights.
             logw = logobs - logsum(logobs, axis=1)
             assert logw.shape == (N, K)
@@ -206,3 +209,99 @@ class GMM(object):
                     sigma = self.sigma[i, :, :]
                     self.sigma[i, :, :] = 0.5 * (sigma + sigma.T) + \
                             1e-6 * np.eye(Do)
+
+    def global_update(self, data, K, max_iterations=100):
+        """
+        Run EM to update clusters.
+        Args:
+            data: An N x D data matrix, where N = number of data points.
+            K: Number of clusters to use.
+        """
+        # Constants.
+        N = data.shape[0]
+        Do = data.shape[1]
+
+        LOGGER.debug('Fitting GMM with %d clusters on %d points', K, N)
+
+        if True:
+            # Initialization.
+            LOGGER.debug('Initializing GMM.')
+            self.sigma = np.zeros((K, Do, Do))
+            self.mu = np.zeros((K, Do))
+            self.logmass = np.log(1.0 / K) * np.ones((K, 1))
+            self.mass = (1.0 / K) * np.ones((K, 1))
+            self.N = data.shape[0]
+            N = self.N
+
+            # Set initial cluster indices.
+            if not self.init_sequential:
+                cidx = np.random.randint(0, K, size=(1, N))
+            else:
+                raise NotImplementedError()
+
+            # Initialize.
+            for i in range(K):
+                cluster_idx = (cidx == i)[0]
+                mu = np.mean(data[cluster_idx, :], axis=0)
+                diff = (data[cluster_idx, :] - mu).T
+                sigma = (1.0 / K) * (diff.dot(diff.T))
+                self.mu[i, :] = mu
+                self.sigma[i, :, :] = sigma + np.eye(Do) * 2e-6
+
+        prevll = -float('inf')
+        for itr in range(max_iterations):
+            # E-step: compute cluster probabilities.
+            logobs = self.estep(data)  # N * K
+
+            # Compute log-likelihood.
+            ll = np.sum(logsum(logobs, axis=1))
+            LOGGER.debug('GMM itr %d/%d. Log likelihood: %f',
+                         itr, max_iterations, ll)
+            if ll < prevll:
+                # TODO: Why does log-likelihood decrease sometimes?
+                LOGGER.debug('Log-likelihood decreased! Ending on itr=%d/%d',
+                             itr, max_iterations)
+                break
+            if np.abs(ll - prevll) < 1e-5 * prevll:
+                LOGGER.debug('GMM converged on itr=%d/%d',
+                             itr, max_iterations)
+                break
+            prevll = ll
+
+            # this will be normalize in exp(logw)
+            # Renormalize to get cluster weights.
+            logw = logobs - logsum(logobs, axis=1)
+            assert logw.shape == (N, K)
+
+            # Renormalize again to get weights for refitting clusters.
+            logwn = logw - logsum(logw, axis=0)
+            assert logwn.shape == (N, K)
+            w = np.exp(logwn)
+
+            # M-step: update clusters.
+            # Fit cluster mass.
+            self.logmass = logsum(logw, axis=0).T
+            self.logmass = self.logmass - logsum(self.logmass, axis=0)
+            assert self.logmass.shape == (K, 1)
+            self.mass = np.exp(self.logmass)
+            # Reboot small clusters.
+            w[:, (self.mass < (1.0 / K) * 1e-4)[:, 0]] = 1.0 / N
+            # Fit cluster means.
+            w_expand = np.expand_dims(w, axis=2)
+            data_expand = np.expand_dims(data, axis=1)
+            self.mu = np.sum(w_expand * data_expand, axis=0)
+            # Fit covariances.
+            wdata = data_expand * np.sqrt(w_expand)
+            assert wdata.shape == (N, K, Do)
+            for i in range(K):
+                # Compute weighted outer product.
+                XX = wdata[:, i, :].T.dot(wdata[:, i, :])
+                mu = self.mu[i, :]
+                self.sigma[i, :, :] = XX - np.outer(mu, mu)
+
+                if self.eigreg:  # Use eigenvalue regularization.
+                    raise NotImplementedError()
+                else:  # Use quick and dirty regularization.
+                    sigma = self.sigma[i, :, :]
+                    self.sigma[i, :, :] = 0.5 * (sigma + sigma.T) + \
+                                          1e-6 * np.eye(Do)

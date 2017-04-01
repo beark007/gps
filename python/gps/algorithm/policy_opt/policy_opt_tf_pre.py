@@ -42,6 +42,8 @@ class PolicyOptTf(PolicyOpt):
         self.obs_tensor = None
         self.precision_tensor = None
         self.action_tensor = None  # mu true
+        self.action_tensor_pre = None
+
         self.solver = None
         self.feat_vals = None
         self.init_network()
@@ -72,6 +74,8 @@ class PolicyOptTf(PolicyOpt):
         self.obs_tensor = tf_map.get_input_tensor()
         self.precision_tensor = tf_map.get_precision_tensor()
         self.action_tensor = tf_map.get_target_output_tensor()
+        self.action_tensor_pre = tf_map.get_target_output_tensor_pre()
+
         self.act_op = tf_map.get_output_op()
         self.feat_op = tf_map.get_feature_op()
         self.loss_scalar = tf_map.get_loss_op()
@@ -94,7 +98,7 @@ class PolicyOptTf(PolicyOpt):
                                last_conv_vars=self.last_conv_vars)
         self.saver = tf.train.Saver()
 
-    def update(self, obs, tgt_mu, tgt_prc, tgt_wt):
+    def update(self, obs, tgt_mu, tgt_mu_pre, tgt_prc, tgt_wt):
         """
         Update policy.
         Args:
@@ -126,6 +130,8 @@ class PolicyOptTf(PolicyOpt):
         # Reshape inputs.
         obs = np.reshape(obs, (N*T, dO))
         tgt_mu = np.reshape(tgt_mu, (N*T, dU))
+        tgt_mu_pre = np.reshape(tgt_mu_pre, (N * T, dU))
+
         tgt_prc = np.reshape(tgt_prc, (N*T, dU, dU))
         tgt_wt = np.reshape(tgt_wt, (N*T, 1, 1))
 
@@ -179,6 +185,7 @@ class PolicyOptTf(PolicyOpt):
             idx_i = idx[start_idx:start_idx+self.batch_size]
             feed_dict = {self.obs_tensor: obs[idx_i],
                          self.action_tensor: tgt_mu[idx_i],
+                         self.action_tensor_pre: tgt_mu_pre[idx_i],
                          self.precision_tensor: tgt_prc[idx_i]}
             train_loss = self.solver(feed_dict, self.sess, device_string=self.device_string)
 

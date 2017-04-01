@@ -45,6 +45,9 @@ class Algorithm(object):
         init_traj_distr['x0'] = agent.x0
         init_traj_distr['dX'] = agent.dX
         init_traj_distr['dU'] = agent.dU
+        self.agent_x0 = agent.x0
+        self.agent_dX = agent.dX
+        self.agent_dU = agent.dU
         del self._hyperparams['agent']  # Don't want to pickle this.
 
         # IterationData objects for each condition.
@@ -125,6 +128,8 @@ class Algorithm(object):
         for cond in range(self.M):
             self.new_traj_distr[cond], self.cur[cond].eta = \
                     self.traj_opt.update(cond, self)
+            if self.traj_opt.flag_reset:
+                break
 
     def _eval_cost(self, cond):
         """
@@ -162,8 +167,13 @@ class Algorithm(object):
             rdiff = -yhat
             rdiff_expand = np.expand_dims(rdiff, axis=2)
             cv_update = np.sum(Cm[n, :, :, :] * rdiff_expand, axis=1)
-            cc[n, :] += np.sum(rdiff * cv[n, :, :], axis=1) + 0.5 * \
-                    np.sum(rdiff * cv_update, axis=1)
+            # cc[n, :] += np.sum(rdiff * cv[n, :, :], axis=1) + 0.5 * \
+            #         np.sum(rdiff * cv_update, axis=1)
+            temp_sum = np.sum(rdiff * cv[n, :, :], axis=1)
+            temp_update = 0.5 * np.sum(rdiff * cv_update, axis=1)
+            # temp_mean_rdiff = np.mean(rdiff, axis=1)
+            # temp_mean_update = np.mean(cv_update, axis=1)
+            cc[n, :] += temp_sum + temp_update
             cv[n, :, :] += cv_update
 
         # Fill in cost estimate.
@@ -190,6 +200,7 @@ class Algorithm(object):
             self.cur[m].step_mult = self.prev[m].step_mult
             self.cur[m].eta = self.prev[m].eta
             self.cur[m].traj_distr = self.new_traj_distr[m]
+            self.cur[m].last_pol = copy.deepcopy(self.prev[m].last_pol)
         delattr(self, 'new_traj_distr')
 
     def _set_new_mult(self, predicted_impr, actual_impr, m):

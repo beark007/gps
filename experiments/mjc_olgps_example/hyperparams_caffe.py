@@ -73,7 +73,7 @@ agent = {
 algorithm = {
     'type': AlgorithmOLGPS,
     'conditions': common['conditions'],
-    'iterations': 4000,
+    'iterations': 20,
     'policy_sample_mode': 'replace', # add
 }
 

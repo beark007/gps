@@ -65,3 +65,8 @@ ALG_PIGPS = {
     # Dynamics fitting is not required for PIGPS.
     'fit_dynamics': False,
 }
+
+ALG_OLGPS = {
+    'init_pol_wt': 0.01,
+    'policy_sample_mode': 'add',
+}
