@@ -120,33 +120,69 @@ def main():
         args.radius = 0.08
     if args.num == None:
        print('Should add the -m num')
-       while True:
-           a = 1
+       # while True:
+       #     a = 1
 
     max_error_bound = 0.01
     # train_positions
     #train_positions = generate_position(args.center_position, args.radius, args.train_time, max_error_bound)
-    bas_pos = 0.04
+    bas_pos = 0.041
     # np.array([0.11, -0.11, 0]),np.array([0.181, -0.181, 0])
 
 
     """
     use for linear increment positions
     """
-    train_positions = np.array([np.array([-bas_pos, -bas_pos, 0]), np.array([bas_pos, -bas_pos, 0]),
-                               # np.array([-bas_pos, bas_pos, 0]),
-                                #np.array([bas_pos, bas_pos, 0]),
-                                np.array([0.07, -0.07, 0]),  np.array([0.10, -0.10, 0]),
-                                np.array([0.15, -0.15, 0]), np.array([0.18, -0.18, 0])])
-    # train_positions = np.array([np.array([0.03, -0.03, 0]), np.array([-0.03, 0.03, 0]), np.array([0.181, -0.181, 0]),
-    #                       np.array([0.101, -0.101, 0]), np.array([0.241, -0.241, 0])])
-    print(train_positions)
-    file_pickle('./position/%d/position_train.pkl' % args.num, train_positions)
+    # init_positions = generate_position(0.02, -0.02, 0.02, 4, 0.001)
+    # init_positions2 = generate_position(0.10, -0.10, 0.02, 2, 0.01)
+    # init_positions3 = generate_position(0.18, -0.18, 0.02, 2, 0.01)
+    # train_positions = np.array([init_positions[0],
+    #                             init_positions[1],
+    #                             init_positions[2],
+    #                             init_positions[3],
+    #                             np.array([0.07, -0.07, 0]), np.array([0.10, -0.10, 0]),
+    #                             np.array([0.15, -0.15, 0]), np.array([0.181, -0.181, 0])
+    #                             ])
+
+    init_positions = generate_position(0.02, -0.02, 0.02, 4, 0.001)
+    init_positions2 = generate_position(0.10, -0.10, 0.02, 2, 0.01)
+    init_positions3 = generate_position(0.18, -0.18, 0.02, 2, 0.01)
+    # train_positions = np.array([init_positions[0],
+    #                             init_positions[1],
+    #                             init_positions[2],
+    #                             init_positions[3],
+    #                             init_positions2[0],
+    #                             init_positions2[1],
+    #                             init_positions3[0],
+    #                             init_positions3[0]
+    #                             ])
+
+    train_positions = np.array([np.array([0.0, 0.0, 0.0]),
+                                np.array([0.04, 0, 0]),
+                                np.array([0, -0.04, 0]),
+                                np.array([0.04, -0.04, 0]),
+                                np.array([0.07, -0.07, 0]),
+                                np.array([0.10, -0.10, 0]),
+                                np.array([0.15, -0.15, 0]),
+                                np.array([0.18, -0.18, 0])
+                                ])
+
+    # train_positions = np.array([np.array([0, 0, 0]), np.array([bas_pos, -bas_pos, 0]),
+    #                             np.array([0, -bas_pos, 0]),
+    #                             np.array([bas_pos, 0, 0]),
+    #                             np.array([0.07, -0.07, 0]),  np.array([0.10, -0.10, 0]),
+    #                             np.array([0.15, -0.15, 0]), np.array([0.181, -0.181, 0])
+    #                             ])
+    # # train_positions = np.array([np.array([0.03, -0.03, 0]), np.array([-0.03, 0.03, 0]), np.array([0.181, -0.181, 0]),
+    # #                       np.array([0.101, -0.101, 0]), np.array([0.241, -0.241, 0])])
+    # print(train_positions)
+    file_pickle('./position/position_train.pkl', train_positions)
 
     # test_positions
-    test_positions = generate_position(args.center_position, -args.center_position, args.radius, args.test_time, max_error_bound)
+    # test_positions = generate_position(args.center_position, -args.center_position, args.radius, args.test_time, max_error_bound)
+
     # plotposition(test_positions)
-    file_pickle('./position/%d/test_position.pkl' % args.num, test_positions)
+    # file_pickle('./position/%d/test_position.pkl' % args.num, test_positions)
 
     # """
     # generate train and test for four areas
@@ -182,25 +218,24 @@ def main():
     """
     # director = args.num
     # idx_pos = 1
-    # # train_position = generate_position(0.2, 0.2, 0.050, 4, 0.05)
-    # train_position = np.array([[ 0.178, -0.222, 0.   ], [ 0.237, -0.178, 0.   ], [ 0.179, -0.172, 0.   ],
-    #                            [0.2, -0.2, 0]])
-    # file_pickle('./position/%d/train_position_%d.pkl' % (director, idx_pos), train_position)
+    # train_position = generate_position(0.2, 0.2, 0.050, 4, 0.01)
+    # # train_position = np.array([[ 0.178, -0.222, 0.   ], [ 0.237, -0.178, 0.   ], [ 0.179, -0.172, 0.   ],
+    # #                            [0.2, -0.2, 0]])
+    # file_pickle('./position/train_position.pkl', train_position)
     # test_position = generate_position(0.2, 0.2, 0.050, 100, 0.05)
-    # file_pickle('./position/%d/test_position_%d.pkl' % (director, idx_pos), test_position)
+    # file_pickle('./position/test_position_%d.pkl' % (idx_pos), test_position)
     # test_position = generate_position(0.2, 0.2, 0.075, 100, 0.05)
-    # file_pickle('./position/%d/test_position_%d.pkl' % (director, idx_pos+1), test_position)
+    # file_pickle('./position/test_position_%d.pkl' % (idx_pos+1), test_position)
     # test_position = generate_position(0.2, 0.2, 0.100, 100, 0.05)
-    # file_pickle('./position/%d/test_position_%d.pkl' % (director, idx_pos+2), test_position)
+    # file_pickle('./position/test_position_%d.pkl' % (idx_pos+2), test_position)
     # test_position = generate_position(0.2, 0.2, 0.125, 100, 0.05)
-    # file_pickle('./position/%d/test_position_%d.pkl' % (director, idx_pos+3), test_position)
+    # file_pickle('./position/test_position_%d.pkl' % (idx_pos+3), test_position)
     # test_position = generate_position(0.2, 0.2, 0.150, 100, 0.05)
-    # file_pickle('./position/%d/test_position_%d.pkl' % (director, idx_pos+4), test_position)
+    # file_pickle('./position/test_position_%d.pkl' % (idx_pos+4), test_position)
     # test_position = generate_position(0.2, 0.2, 0.175, 100, 0.05)
-    # file_pickle('./position/%d/test_position_%d.pkl' % (director, idx_pos+5), test_position)
+    # file_pickle('./position/test_position_%d.pkl' % (idx_pos+5), test_position)
     # test_position = generate_position(0.2, 0.2, 0.200, 100, 0.05)
-    # file_pickle('./position/%d/test_position_%d.pkl' % (director, idx_pos+6), test_position)
-    # print('train: ', train_position)
+    # file_pickle('./position/test_position_%d.pkl' % (idx_pos+6), test_position)
 
 
 if __name__ == '__main__':

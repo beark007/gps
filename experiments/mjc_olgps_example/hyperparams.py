@@ -12,6 +12,7 @@ from gps.algorithm.algorithm_olgps import AlgorithmOLGPS
 from gps.algorithm.cost.cost_fk import CostFK
 from gps.algorithm.cost.cost_action import CostAction
 from gps.algorithm.cost.cost_sum import CostSum
+from gps.algorithm.cost.cost_utils import RAMP_FINAL_ONLY
 from gps.algorithm.dynamics.dynamics_lr_prior import DynamicsLRPrior
 from gps.algorithm.dynamics.dynamics_prior_gmm import DynamicsPriorGMM
 from gps.algorithm.traj_opt.traj_opt_lqr_python import TrajOptLQRPython
@@ -103,10 +104,21 @@ fk_cost = {
     'alpha': 1e-5,
 }
 
+final_cost = {
+    'type': CostFK,
+    'ramp_option': RAMP_FINAL_ONLY,
+    'target_end_effector': fk_cost['target_end_effector'],
+    'wp': fk_cost['wp'],
+    'l1': 1.0,
+    'l2': 0.0,
+    'alpha': 1e-5,
+    'wp_final_multiplier': 10.0,
+}
+
 algorithm['cost'] = {
     'type': CostSum,
-    'costs': [torque_cost, fk_cost],
-    'weights': [1.0, 1.0],
+    'costs': [torque_cost, fk_cost, final_cost],
+    'weights': [1.0, 1.0, 1.0],
 }
 
 algorithm['dynamics'] = {
@@ -126,7 +138,7 @@ algorithm['traj_opt'] = {
 
 algorithm['policy_opt'] = {
         'type': PolicyOptCaffe,
-        'iterations': 4000,
+        'iterations': 11000,
         'weights_file_prefix': EXP_DIR + 'policy',
 }
 

@@ -1,8 +1,4 @@
 """ This file defines the main object that runs experiments. """
-"""
-train policy with fit global into linear form
-use the hyparameter_caffe.py
-"""
 
 import matplotlib as mpl
 mpl.use('Qt4Agg')
@@ -16,13 +12,13 @@ import copy
 import argparse
 import threading
 import time
+import numpy as np
 
 # Add gps/python to path so that imports work.
 sys.path.append('/'.join(str.split(__file__, '/')[:-2]))
 from gps.gui.gps_training_gui import GPSTrainingGUI
 from gps.utility.data_logger import DataLogger
 from gps.sample.sample_list import SampleList
-import numpy as np
 
 
 class GPSMain(object):
@@ -55,9 +51,7 @@ class GPSMain(object):
         config['algorithm']['agent'] = self.agent
         self.algorithm = config['algorithm']['type'](config['algorithm'])
 
-        self.init_alpha(self)
-
-    def run(self, config, itr_load=None):
+    def run(self, time_experiment, exper_condition, itr_load=None):
         """
         Run training by iteratively sampling and taking an iteration.
         Args:
@@ -65,340 +59,131 @@ class GPSMain(object):
                 iteration, and resumes training at the next iteration.
         Returns: None
         """
-        self.target_points = self.agent._hyperparams['target_ee_points'][:3]
         itr_start = self._initialize(itr_load)
 
-        # """ set pre"""
-        # position_train = self.data_logger.unpickle('./position/position_train.pkl')
+        # test_position = self.data_logger.unpickle('./position/%d/%d/test_position.pkl'
+        #                                           % (time_experiment, exper_condition))
+        self.target_ee_point = self.agent._hyperparams['target_ee_points'][:3]
 
+        for itr in range(itr_start, self._hyperparams['iterations']):
+            print('itr******:  %d   **********' % itr)
+            for cond in self._train_idx:
+                for i in range(self._hyperparams['num_samples']):
+                    self._take_sample(itr, cond, i)
 
+            traj_sample_lists = [
+                self.agent.get_samples(cond, -self._hyperparams['num_samples'])
+                for cond in self._train_idx
+            ]
 
-        # print('training position.....')
-        # print(position_train)
+            # Clear agent samples.
+            self.agent.clear_samples()
 
-        # print('test all testing position....')
-        # for i in xrange(position_train.shape[0]):
-        #     test_positions = self.generate_position_radius(position_train[i], 0.03, 5, 0.01)
-        #     if i == 0:
-        #         all_test_positions = test_positions
-        #     else:
-        #         all_test_positions = np.concatenate((all_test_positions, test_positions))
+            self._take_iteration(itr, traj_sample_lists)
+            pol_sample_lists = self._take_policy_samples()
 
-        T = self.algorithm.T
-        N = self._hyperparams['num_samples']
-        dU = self.algorithm.dU
+            self._log_data(itr, traj_sample_lists, pol_sample_lists)
 
-        flag_fail = False
+        """ test policy and collect costs"""
+        """
+        gradually add the distance of agent position
+        """
+        center_position = 0.02
+        radius = 0.02
+        max_error_bound = 0.02
+        directory = 9
+        for test_condition in range(7):
+            # test_position = self.generate_position(center_position, radius, 30, max_error_bound)
+            test_position = self.data_logger.unpickle('./position/test_position_%d.pkl'
+                                                      % (test_condition + 1))
+            costs, position_suc_count, distance = self.test_cost(test_position, len(pol_sample_lists))
+            print('distance:', distance)
+            # add the position_suc_count
+            if test_condition == 0:
+                #augement array
+                all_pos_suc_count = np.expand_dims(position_suc_count, axis=0)
+                all_distance = np.expand_dims(distance, axis=0)
+            else:
+                all_pos_suc_count = np.vstack((all_pos_suc_count, position_suc_count))
+                all_distance = np.vstack((all_distance, distance))
 
-        itr_count = 0
-        skip_pos = list()
-        for test_num in range(0, 1):
-
-            test_count = 5 + test_num
-
-            for test_itr in range(1):
-                itr_count += 1
-                print("itr_______________:", itr_count)
-                """ generate random training position in a specify circle"""
-                # test different radius
-                # radius = 0.02
-                # if test_num <= 3:
-                #     radius = radius + 0.02 * test_num
-                # else:
-                #     radius = radius + 0.01 * 6 + 0.01 * test_num
-
-                # test constant radius many times
-                if test_itr == 0:
-                    radius = 0.04
-                else:
-                    radius = 0.03
-
-                center_position = np.array([0.08, -0.08, 0])
-
-                # position_train = self.generate_position_radius(center_position, radius, test_count, 0.02)
-
-                position_ori = np.array([[0.05, -0.05, 0],
-                                         [0.08, -0.05, 0],
-                                         [0.11, -0.05, 0],
-                                         [0.05, -0.08, 0],
-                                         [0.08, -0.08, 0],
-                                         [0.11, -0.08, 0],
-                                         [0.05, -0.11, 0],
-                                         [0.08, -0.11, 0],
-                                         [0.11, -0.11, 0]])
-                sort_idx = [[0,1,2,5,8,7,6,3,4],
-                            [0,2,8,6,1,5,7,3,4],
-                            [0,2,4,1,5,8,3,6,7],
-                            [0,1,2,5,4,3,6,7,8]]
-                position_train = self.position_shuffle(position_ori, sort_idx[3])
-
-                for num_pos in range(position_train.shape[0]):
-                    """ load train position and reset agent model. """
-                    for cond in self._train_idx:
-                        self._hyperparams['agent']['pos_body_offset'][cond] = position_train[num_pos]
-                    self.agent.reset_model(self._hyperparams)
-
-                    # initial train array
-                    train_prc = np.zeros((0, T, dU, dU))
-                    train_mu = np.zeros((0, T, dU))
-                    train_obs_data = np.zeros((0, T, self.algorithm.dO))
-                    train_wt = np.zeros((0, T))
-
-                    # initial variables
-                    count_suc = 0
-
-                    for itr in range(itr_start, self._hyperparams['iterations']):
-                        print('******************num_pos:************', num_pos)
-                        print('______________________itr:____________', itr)
-                        for cond in self._train_idx:
-                            for i in range(self._hyperparams['num_samples']):
-                                if num_pos == 0:
-                                    self._take_sample(itr, cond, i)
-                                elif itr == 0:
-                                    self._take_sample(itr, cond, i)
-                                else:
-                                    self._take_train_sample(itr, cond, i)
-                                    # self._take_sample(itr, cond, i)
-
-                        traj_sample_lists = [
-                            self.agent.get_samples(cond, -self._hyperparams['num_samples'])
-                            for cond in self._train_idx
-                        ]
-
-                        # calculate the distance of  the end-effector to target position
-                        ee_pos = self.agent.get_ee_pos(cond)[:3]
-                        target_pos = self.agent._hyperparams['target_ee_pos'][:3]
-                        distance_pos = ee_pos - target_pos
-                        distance_ee = np.sqrt(distance_pos.dot(distance_pos))
-                        print('distance ee:', distance_ee)
-
-                        # collect the successful sample to train global policy
-                        if distance_ee <= 0.06:
-                            self.adjust_alpha(0.015)
-                            count_suc += 1
-                            tgt_mu, tgt_prc, obs_data, tgt_wt = self.train_prepare(traj_sample_lists)
-                            train_mu = np.concatenate((train_mu, tgt_mu))
-                            train_prc = np.concatenate((train_prc, tgt_prc))
-                            train_obs_data = np.concatenate((train_obs_data, obs_data))
-                            train_wt = np.concatenate((train_wt, tgt_wt))
-
-                        # Clear agent samples.
-                        self.agent.clear_samples()
-
-                        # if get enough sample, then break
-                        if count_suc > 8:
-                            break
-
-                        self._take_iteration(itr, traj_sample_lists)
-                        if self.algorithm.traj_opt.flag_reset:
-                            break
-                        # pol_sample_lists = self._take_policy_samples()
-                        # self._log_data(itr, traj_sample_lists, pol_sample_lists)
-                        if num_pos > 0:
-                            self.algorithm.fit_global_linear_policy(traj_sample_lists)
-
-                    if not self.algorithm.traj_opt.flag_reset:
-                        # train NN with good samples
-                        self.algorithm.policy_opt.update(train_obs_data, train_mu, train_prc, train_wt)
-                        # test the trained in the current position
-                        print('test current policy.....')
-                        self.test_current_policy()
-                        # print('test all testing position....')
-                        # for i in xrange(position_train.shape[0]):
-                        #     test_positions = self.generate_position_radius(position_train[i], 0.03, 5, 0.01)
-                        #     if i == 0:
-                        #         all_test_positions = test_positions
-                        #     else:
-                        #         all_test_positions = np.concatenate((all_test_positions, test_positions))
-                        # self.test_cost(all_test_positions)
-
-                    # reset the algorithm to the initial algorithm for the next position
-                    # del self.algorithm
-                    # config['algorithm']['agent'] = self.agent
-                    # self.algorithm = config['algorithm']['type'](config['algorithm'])
-                    else:
-                        flag_fail = True
-                        skip_pos.append(['%d_%d_%d' % (test_num, test_itr, num_pos)])
-                    self.algorithm.reset_alg()
-                    self.next_iteration_prepare()
-
-                print('test all testing position....')
-                test_positions = self.generate_position_radius(center_position, radius, 100, 0.01)
-                cost, suc, distance = self.test_cost(test_positions)
-                self.data_logger.pickle('./result/cost_%d' % itr_count, cost)
-                self.data_logger.pickle('./result/distance_%d' % itr_count, distance)
-                self.data_logger.pickle('./result/suc_%d' % itr_count, suc)
-
-                self.data_logger.pickle('./result/train_pos_%d' % itr_count, position_train)
-                self.data_logger.pickle('./result/test_pos_%d' % itr_count, test_positions)
-                self.data_logger.pickle('./result/skip_pos', skip_pos)
-
-                del self.algorithm
-                config['algorithm']['agent'] = self.agent
-                self.algorithm = config['algorithm']['type'](config['algorithm'])
-                print("skip position:", skip_pos)
+            costs = costs.reshape(costs.shape[0] * costs.shape[1])
+            mean_cost = np.array([np.mean(costs)])
+            center_position = center_position + radius * 2
 
         self._end()
+        return costs, mean_cost, all_pos_suc_count, all_distance
 
-    def position_shuffle(self, positions, sort_idx):
-        """
-        re range the positions
-        Args:
-            positions:
-            sort_idx:
+    def generate_position(self, cposition, radius, conditions, max_error_bound):
+        # all_positions = np.zeros(0)
 
-        Returns:
-
-        """
-        return positions[sort_idx]
-
-
-    def generate_position_radius(self, position_ori, radius, conditions, max_error_bound):
-        """
-
-        Args:
-            position_ori: original center position of generated positions
-            radius:     area's radius
-            conditions: the quantity of generating positions
-            max_error_bound: the mean of generated positions' error around cposition
-
-        Returns:
-
-        """
-        c_x = position_ori[0]
-        c_y = position_ori[1]
         while True:
-            all_positions = np.zeros(0)
-            center_position = np.array([c_x, c_y, 0])
+            all_positions = np.array([cposition, -cposition, 0])
+            center_position = np.array([cposition, -cposition, 0])
             for i in range(conditions):
-                position = np.random.uniform(radius, radius, 3)
+                position = np.random.uniform(cposition - radius, cposition + radius, 3)
                 while True:
                     position[2] = 0
-                    position[1] = (position[1] + c_y)
-                    position[0] = position[0] + c_x
+                    position[1] = -position[1]
                     area = (position - center_position).dot(position - center_position)
-                    if area <= (np.pi * radius ** 2) / 4.0:
+                    # area = np.sum(np.multiply(position - center_position, position - center_position))
+                    if area <= radius ** 2:
+                        # print(area)
                         break
-                    position = np.random.uniform(-radius, radius, 3)
-                if i == 0:
-                    all_positions = position
-                    all_positions = np.expand_dims(all_positions, axis=0)
-                else:
-                    all_positions = np.vstack((all_positions, position))
-
+                    position = np.random.uniform(cposition - radius, cposition + radius, 3)
+                position = np.floor(position * 1000) / 1000.0
+                all_positions = np.concatenate((all_positions, position))
+            all_positions = np.reshape(all_positions, [all_positions.shape[0] / 3, 3])
+            # print(all_positions[:, 1])
+            # print('mean:')
+            # print(np.mean(all_positions, axis=0))
             mean_position = np.mean(all_positions, axis=0)
-            mean_error = np.fabs(center_position - mean_position)
-            print('mean_error:', mean_error)
-            if mean_error[0] < max_error_bound and mean_error[1] < max_error_bound:
+            # mean_error1 = np.fabs(mean_position[0] - 0.11)
+            # mean_error2 = np.fabs(mean_position[1] + 0.11)
+            mean_error1 = np.fabs(mean_position[0] - (cposition - max_error_bound))
+            mean_error2 = np.fabs(mean_position[1] + (cposition - max_error_bound))
+            if mean_error1 < max_error_bound and mean_error2 < max_error_bound:
+                print('mean:')
+                print(np.mean(all_positions, axis=0))
                 break
-
-        all_positions = np.floor(all_positions * 1000) / 1000.0
-        # print('all_position:', all_positions)
+        print(all_positions)
+        print(all_positions.shape)
         return all_positions
 
-    def test_cost(self, position):
+    def test_cost(self, positions, train_cond):
         """
-        test the NN policy at all position
+        test policy and collect costs
         Args:
-            position:
+            positions: test position from test_position.pkl
 
         Returns:
+            cost:   mean cost of all test position
+            total_suc:  successful pegging trial count  1:successful    0:fail
 
         """
-        total_costs = np.zeros(0)
-        total_distance = np.zeros(0)
+        iteration = positions.shape[0] / train_cond
+        total_costs = list()
+        total_ee_points = list()
         total_suc = np.zeros(0)
-        print 'calculate cost_________________'
-        for itr in range(position.shape[0]):
-            if itr % 51 == 0:
-                print('****************')
+        total_distance = np.zeros(0)
+        for itr in range(iteration):
             for cond in self._train_idx:
-                self._hyperparams['agent']['pos_body_offset'][cond] = position[itr]
+                self._hyperparams['agent']['pos_body_offset'][cond] = positions[itr + cond]
             self.agent.reset_model(self._hyperparams)
-            _, cost, ee_points = self.take_nn_samples()
-            ee_error = ee_points[:3] - self.target_points
-            distance = np.sqrt(ee_error.dot(ee_error))
-            error = np.sum(np.fabs(ee_error))
-            if (error < 0.06):
+            _, cost, ee_points = self._test_policy_samples()
+            for cond in self._train_idx:
+                total_ee_points.append(ee_points[cond])
+            total_costs.append(cost)
+        print("total_costs:", total_costs)
+        for i in range(len(total_ee_points)):
+            ee_error = total_ee_points[i][:3] - self.target_ee_point
+            distance = ee_error.dot(ee_error)**0.5
+            if( distance < 0.06 ):
                 total_suc = np.concatenate((total_suc, np.array([1])))
             else:
                 total_suc = np.concatenate((total_suc, np.array([0])))
-            total_costs = np.concatenate((total_costs, np.array(cost)))
             total_distance = np.concatenate((total_distance, np.array([distance])))
-        # return np.mean(total_costs), total_suc, total_distance
-        return total_costs, total_suc, total_distance
-
-    def next_iteration_prepare(self):
-        """
-        prepare for the next iteration
-        Returns:
-
-        """
-        self.init_alpha()
-
-    def init_alpha(self, val=None):
-        """
-        initialize the alpha1, 2, the default is 0.7, 0.3
-        Args:
-            val:
-
-        Returns:
-
-        """
-        if val is None:
-            self.alpha1 = 0.9
-            self.alpha2 = 0.1
-        else:
-            self.alpha1 = 0.9
-            self.alpha2 = 0.1
-    def pol_alpha(self):
-        return self.alpha1, self.alpha2
-
-    def adjust_alpha(self, step):
-        self.alpha1 = self.alpha1 - step
-        self.alpha2 = self.alpha2 + step
-
-        if self.alpha1 < 0.7:
-            self.alpha1 = 0.7
-            self.alpha2 = 0.3
-
-    def train_prepare(self, sample_lists):
-        """
-        prepare the train data of the sample lists
-        Args:
-            sample_lists: sample list from agent
-
-        Returns:
-            target mu, prc, obs_data, wt
-
-        """
-        algorithm = self.algorithm
-        dU, dO, T = algorithm.dU, algorithm.dO, algorithm.T
-        obs_data, tgt_mu = np.zeros((0, T, dO)), np.zeros((0, T, dU))
-        tgt_prc = np.zeros((0, T, dU, dU))
-        tgt_wt = np.zeros((0, T))
-        wt_origin = 0.01 * np.ones(T)
-        for m in range(algorithm.M):
-            samples = sample_lists[m]
-            X = samples.get_X()
-            N = len(samples)
-            prc = np.zeros((N, T, dU, dU))
-            mu = np.zeros((N, T, dU))
-            wt = np.zeros((N, T))
-
-            traj = algorithm.cur[m].traj_distr
-            for t in range(T):
-                prc[:, t, :, :] = np.tile(traj.inv_pol_covar[t, :, :],
-                                          [N, 1, 1])
-                for i in range(N):
-                    mu[i, t, :] = (traj.K[t, :, :].dot(X[i, t, :]) + traj.k[t, :])
-                wt[:, t].fill(wt_origin[t])
-            tgt_mu = np.concatenate((tgt_mu, mu))
-            tgt_prc = np.concatenate((tgt_prc, prc))
-            obs_data = np.concatenate((obs_data, samples.get_obs()))
-            tgt_wt = np.concatenate((tgt_wt, wt))
-
-        return tgt_mu, tgt_prc, obs_data, tgt_wt
+        return np.array(total_costs), total_suc, total_distance
 
     def test_policy(self, itr, N):
         """
@@ -517,25 +302,6 @@ class GPSMain(object):
                 verbose=(i < self._hyperparams['verbose_trials'])
             )
 
-    def _take_train_sample(self, itr, cond, i):
-        """
-        collect sample with merge policy
-        Args:
-            itr:
-            cond:
-            i:
-
-        Returns:
-
-        """
-        alpha1, alpha2 = self.pol_alpha()
-        print("alpha:********%03f, %03f******" %(alpha1, alpha2))
-        pol1 = self.algorithm.cur[cond].traj_distr
-        pol2 = self.algorithm.cur[cond].last_pol
-        if not self.gui:
-            self.agent.merge_controller(pol1, alpha1, pol2, alpha2, cond,
-                                        verbose=(i < self._hyperparams['verbose_trials']))
-
     def _take_iteration(self, itr, sample_lists):
         """
         Take an iteration of the algorithm.
@@ -573,59 +339,35 @@ class GPSMain(object):
                 verbose=verbose, save=False, noisy=False)
         return [SampleList(samples) for samples in pol_samples]
 
-    def take_nn_samples(self, N=None):
+    def _test_policy_samples(self, N=None):
         """
-        take the NN policy
+        test sample from the policy and collect the costs
         Args:
             N:
 
         Returns:
-            samples, costs, ee_points
+            samples
+            costs:      list of cost for each condition
+            ee_point:   list of ee_point for each condition
 
         """
-        """
-            Take samples from the policy to see how it's doing.
-            Args:
-                N  : number of policy samples to take per condition
-            Returns: None
-            """
-
         if 'verbose_policy_trials' not in self._hyperparams:
-            # AlgorithmTrajOpt
             return None
         verbose = self._hyperparams['verbose_policy_trials']
-        if self.gui:
-            self.gui.set_status_text('Taking policy samples.')
         pol_samples = [[None] for _ in range(len(self._test_idx))]
-        # Since this isn't noisy, just take one sample.
-        # TODO: Make this noisy? Add hyperparam?
-        # TODO: Take at all conditions for GUI?
         costs = list()
+        ee_points = list()
         for cond in range(len(self._test_idx)):
             pol_samples[cond][0] = self.agent.sample(
                 self.algorithm.policy_opt.policy, self._test_idx[cond],
-                verbose=verbose, save=False, noisy=False)
-            policy_cost = self.algorithm.cost[0].eval(pol_samples[cond][0])[0]
-            policy_cost = np.sum(policy_cost)
-            print "cost: %d" % policy_cost  # wait to plot in gui in gps_training_gui.py
-            costs.append(policy_cost)
-
-            ee_points = self.agent.get_ee_point(cond)
-
-        return [SampleList(samples) for samples in pol_samples], costs, ee_points
-
-    def test_current_policy(self):
-        """
-        test the current NN policy in the current position
-        Returns:
-
-        """
-        verbose = self._hyperparams['verbose_policy_trials']
-        for cond in self._train_idx:
-            samples = self.agent.sample(
-                self.algorithm.policy_opt.policy, cond,
                 verbose=verbose, save=False, noisy=False
             )
+            # in algorithm.py: _eval_cost
+            policy_cost = self.algorithm.cost[0].eval(pol_samples[cond][0])[0]
+            policy_cost = np.sum(policy_cost)   #100 step
+            costs.append(policy_cost)
+            ee_points.append(self.agent.get_ee_point(cond))
+        return [SampleList(samples) for samples in pol_samples], costs, ee_points
 
     def _log_data(self, itr, traj_sample_lists, pol_sample_lists=None):
         """
@@ -685,6 +427,17 @@ def main():
                         help='silent debug print outs')
     parser.add_argument('-q', '--quit', action='store_true',
                         help='quit GUI automatically when finished')
+    parser.add_argument('-c', '--condition', metavar='N', type=int,
+                        help='consider N position')
+    parser.add_argument('-m', '--num', metavar='N', type=int,
+                        help='test\' N nums of experiment')
+    parser.add_argument('-exper', '--exper', metavar='N', type=int,
+                        help='time of test experiment')
+    parser.add_argument('-set', '--set_cond', metavar='N', type=int,
+                        help='train on special position setting')
+    parser.add_argument('-algi', '--alg_itr', metavar='N', type=int,
+                        help='control the time of train NN')
+
     args = parser.parse_args()
 
     exp_name = args.experiment
@@ -778,6 +531,20 @@ def main():
         else:
             gps.test_policy(itr=current_itr, N=test_policy_N)
     else:
+        if args.condition:
+            """ if specify the N training position"""
+            num_position = args.condition
+            data_logger = DataLogger()
+            positions = data_logger.unpickle('./position/train_position.pkl')
+            # positions = data_logger.unpickle('./position/suc_train_position.pkl')
+            hyperparams.agent['conditions'] = num_position
+            hyperparams.common['conditions'] = num_position
+            hyperparams.algorithm['conditions'] = num_position
+            pos_body_offset = list()
+            for i in range(num_position):
+                pos_body_offset.append(positions[i])
+            hyperparams.agent['pos_body_offset'] = pos_body_offset
+
         import random
         import numpy as np
         import matplotlib.pyplot as plt
@@ -785,6 +552,20 @@ def main():
         seed = hyperparams.config.get('random_seed', 0)
         random.seed(seed)
         np.random.seed(seed)
+
+        # set the time of training NN
+        if args.alg_itr:
+            hyperparams.config['iterations'] = args.alg_itr
+
+        """
+        set extend setting
+        """
+        data_logger = DataLogger()
+        train_position = data_logger.unpickle('./position/all_train_position.pkl')
+        hyperparams.agent['pos_body_offset'] = list(train_position)
+        hyperparams.agent['conditions'] = len(train_position)
+        hyperparams.common['conditions'] = len(train_position)
+        hyperparams.algorithm['conditions'] = len(train_position)
 
         gps = GPSMain(hyperparams.config, args.quit)
         if hyperparams.config['gui_on']:
@@ -797,7 +578,50 @@ def main():
             plt.ioff()
             plt.show()
         else:
-            gps.run(hyperparams.config, itr_load=resume_training_itr)
+            costs, mean_cost, position_suc_count, all_distance = gps.run(args.num,
+                                                                         exper_condition=args.set_cond,
+                                                                         itr_load=resume_training_itr)
+            # gps.data_logger.pickle('./position/%d/experiment_%d/md_all_distance.pkl'
+            #                        % (args.num, args.exper), all_distance)
+            gps.data_logger.pickle('./position/md_all_distance.pkl', all_distance)
+            gps.data_logger.pickle('./position/md_all_cost.pkl', costs)
+
+            """
+                        if args.condition == 1:
+                costs = np.expand_dims(costs, axis=0)
+                position_suc_count = np.expand_dims(position_suc_count, axis=0)
+                gps.data_logger.pickle('./position/%d/md_all_test_costs_%d.pkl'
+                                       % (args.num, args.condition), costs)
+                gps.data_logger.pickle('./position/%d/md_test_costs.pkl'
+                                       % args.num, mean_cost)
+                gps.data_logger.pickle('./position/%d/position_md_%d.pkl'
+                                       % (args.num, args.condition), position_suc_count)
+                print mean_cost.shape
+            elif args.condition > 1:
+                # there should be check existing pkl
+                all_costs = gps.data_logger.unpickle('./position/%d/md_all_test_costs_%d.pkl'
+                                                     % (args.num, args.condition - 1))
+                min_len = min(all_costs.shape[1], costs.shape[0])
+                all_costs = all_costs[:, :min_len]
+                costs = costs[:min_len]
+                all_costs = np.vstack((all_costs, costs))
+
+                all_mean_costs = gps.data_logger.unpickle('./position/%d/md_test_costs.pkl'
+                                                          % args.num)
+                all_mean_costs = np.concatenate((all_mean_costs, mean_cost))
+
+                all_position_suc_count = gps.data_logger.unpickle('./position/%d/position_md_%d.pkl'
+                                                                  % (args.num, args.condition - 1))
+                min_len = min(all_position_suc_count.shape[1], costs.shape[0])
+                all_position_suc_count = all_position_suc_count[:, :min_len]
+                position_suc_count = position_suc_count[:min_len]
+                all_position_suc_count = np.vstack((all_position_suc_count, position_suc_count))
+                print all_costs.shape
+                gps.data_logger.pickle('./position/%d/md_test_costs.pkl' % args.num, all_mean_costs)
+                gps.data_logger.pickle('./position/%d/md_all_test_costs_%d.pkl' % (args.num, args.condition), all_costs)
+                gps.data_logger.pickle('./position/%d/position_md_%d.pkl' % (args.num, args.condition), all_position_suc_count)
+            """
+
 
 
 if __name__ == "__main__":

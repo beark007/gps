@@ -1,7 +1,8 @@
 """ This file defines the main object that runs experiments. """
 """
-train policy with fit global into linear form
-use the hyparameter_caffe.py
+policy learn in three area and test in six area
+OLGPS paper experiment 1
+without alpha
 """
 
 import matplotlib as mpl
@@ -88,157 +89,190 @@ class GPSMain(object):
         N = self._hyperparams['num_samples']
         dU = self.algorithm.dU
 
-        flag_fail = False
+        flag_fail = True
 
-        itr_count = 0
-        skip_pos = list()
-        for test_num in range(0, 1):
 
-            test_count = 5 + test_num
+        position_train = self.data_logger.unpickle('./position/all_train_position.pkl')
+        # test_position = self.generate_test_position()
+        test_position = self.data_logger.unpickle('./position/all_test_position.pkl')
+        all_position_train = np.zeros(position_train.shape)
 
-            for test_itr in range(1):
-                itr_count += 1
-                print("itr_______________:", itr_count)
-                """ generate random training position in a specify circle"""
-                # test different radius
-                # radius = 0.02
-                # if test_num <= 3:
-                #     radius = radius + 0.02 * test_num
-                # else:
-                #     radius = radius + 0.01 * 6 + 0.01 * test_num
+        for num_pos in range(position_train.shape[0]):
+            """ load train position and reset agent model. """
+            flag_fail = True
+            while(flag_fail):
 
-                # test constant radius many times
-                if test_itr == 0:
-                    radius = 0.04
-                else:
-                    radius = 0.03
+                """ test OLGPS only"""
+                position_temp = position_train[num_pos]
+                # disturbe = np.random.uniform(-0.005, 0.005, 1)
+                # position_temp[0] = position_temp[0] + disturbe
+                # position_temp[1] = position_temp[1] - disturbe
+                # all_position_train = np.concatenate((all_position_train, position_temp))
 
-                center_position = np.array([0.08, -0.08, 0])
 
-                # position_train = self.generate_position_radius(center_position, radius, test_count, 0.02)
+                for cond in self._train_idx:
+                    # self._hyperparams['agent']['pos_body_offset'][cond] = position_train[num_pos]
+                    self._hyperparams['agent']['pos_body_offset'][cond] = position_temp
+                self.agent.reset_model(self._hyperparams)
 
-                position_ori = np.array([[0.05, -0.05, 0],
-                                         [0.08, -0.05, 0],
-                                         [0.11, -0.05, 0],
-                                         [0.05, -0.08, 0],
-                                         [0.08, -0.08, 0],
-                                         [0.11, -0.08, 0],
-                                         [0.05, -0.11, 0],
-                                         [0.08, -0.11, 0],
-                                         [0.11, -0.11, 0]])
-                sort_idx = [[0,1,2,5,8,7,6,3,4],
-                            [0,2,8,6,1,5,7,3,4],
-                            [0,2,4,1,5,8,3,6,7],
-                            [0,1,2,5,4,3,6,7,8]]
-                position_train = self.position_shuffle(position_ori, sort_idx[3])
+                """ test OLGPS generalization"""
+                # for cond in self._train_idx:
+                #     self._hyperparams['agent']['pos_body_offset'][cond] = position_train[num_pos]
+                #     # self._hyperparams['agent']['pos_body_offset'][cond] = position_temp
+                # self.agent.reset_model(self._hyperparams)
 
-                for num_pos in range(position_train.shape[0]):
-                    """ load train position and reset agent model. """
+                # initial train array
+                train_prc = np.zeros((0, T, dU, dU))
+                train_mu = np.zeros((0, T, dU))
+                train_obs_data = np.zeros((0, T, self.algorithm.dO))
+                train_wt = np.zeros((0, T))
+
+                # initial variables
+                count_suc = 0
+
+                for itr in range(itr_start, self._hyperparams['iterations']):
+                    print('******************num_pos:************', num_pos)
+                    print('______________________itr:____________', itr)
                     for cond in self._train_idx:
-                        self._hyperparams['agent']['pos_body_offset'][cond] = position_train[num_pos]
-                    self.agent.reset_model(self._hyperparams)
+                        for i in range(self._hyperparams['num_samples']):
+                            if num_pos == 0:
+                                self._take_sample(itr, cond, i)
+                            elif itr == 0:
+                                self._take_sample(itr, cond, i)
+                            else:
+                                self._take_train_sample(itr, cond, i)
+                                # self._take_sample(itr, cond, i)
 
-                    # initial train array
-                    train_prc = np.zeros((0, T, dU, dU))
-                    train_mu = np.zeros((0, T, dU))
-                    train_obs_data = np.zeros((0, T, self.algorithm.dO))
-                    train_wt = np.zeros((0, T))
+                    traj_sample_lists = [
+                        self.agent.get_samples(cond, -self._hyperparams['num_samples'])
+                        for cond in self._train_idx
+                    ]
 
-                    # initial variables
-                    count_suc = 0
+                    # calculate the distance of  the end-effector to target position
+                    ee_pos = self.agent.get_ee_pos(cond)[:3]
+                    target_pos = self.agent._hyperparams['target_ee_pos'][:3]
+                    distance_pos = ee_pos - target_pos
+                    distance_ee = np.sqrt(distance_pos.dot(distance_pos))
+                    print('distance ee:', distance_ee)
 
-                    for itr in range(itr_start, self._hyperparams['iterations']):
-                        print('******************num_pos:************', num_pos)
-                        print('______________________itr:____________', itr)
-                        for cond in self._train_idx:
-                            for i in range(self._hyperparams['num_samples']):
-                                if num_pos == 0:
-                                    self._take_sample(itr, cond, i)
-                                elif itr == 0:
-                                    self._take_sample(itr, cond, i)
-                                else:
-                                    self._take_train_sample(itr, cond, i)
-                                    # self._take_sample(itr, cond, i)
+                    # collect the successful sample to train global policy
+                    if distance_ee <= 0.04:
+                        self.adjust_alpha(0.02)
+                        count_suc += 1
+                        tgt_mu, tgt_prc, obs_data, tgt_wt = self.train_prepare(traj_sample_lists)
+                        train_mu = np.concatenate((train_mu, tgt_mu))
+                        train_prc = np.concatenate((train_prc, tgt_prc))
+                        train_obs_data = np.concatenate((train_obs_data, obs_data))
+                        train_wt = np.concatenate((train_wt, tgt_wt))
 
-                        traj_sample_lists = [
-                            self.agent.get_samples(cond, -self._hyperparams['num_samples'])
-                            for cond in self._train_idx
-                        ]
+                    # Clear agent samples.
+                    self.agent.clear_samples()
 
-                        # calculate the distance of  the end-effector to target position
-                        ee_pos = self.agent.get_ee_pos(cond)[:3]
-                        target_pos = self.agent._hyperparams['target_ee_pos'][:3]
-                        distance_pos = ee_pos - target_pos
-                        distance_ee = np.sqrt(distance_pos.dot(distance_pos))
-                        print('distance ee:', distance_ee)
+                    # if get enough sample, then break
+                    if count_suc > 8:
+                        break
 
-                        # collect the successful sample to train global policy
-                        if distance_ee <= 0.06:
-                            self.adjust_alpha(0.015)
-                            count_suc += 1
-                            tgt_mu, tgt_prc, obs_data, tgt_wt = self.train_prepare(traj_sample_lists)
-                            train_mu = np.concatenate((train_mu, tgt_mu))
-                            train_prc = np.concatenate((train_prc, tgt_prc))
-                            train_obs_data = np.concatenate((train_obs_data, obs_data))
-                            train_wt = np.concatenate((train_wt, tgt_wt))
+                    self._take_iteration(itr, traj_sample_lists)
+                    if self.algorithm.traj_opt.flag_reset:
+                        break
+                    # pol_sample_lists = self._take_policy_samples()
+                    # self._log_data(itr, traj_sample_lists, pol_sample_lists)
+                    if num_pos > 0:
+                        self.algorithm.fit_global_linear_policy(traj_sample_lists)
 
-                        # Clear agent samples.
-                        self.agent.clear_samples()
+                if not self.algorithm.traj_opt.flag_reset:
+                    # save train position
+                    all_position_train[num_pos] = position_temp
 
-                        # if get enough sample, then break
-                        if count_suc > 8:
-                            break
+                    flag_fail = False
+                    # train NN with good samples
+                    self.algorithm.policy_opt.update(train_obs_data, train_mu, train_prc, train_wt)
+                    # test the trained in the current position
+                    print('test current policy.....')
+                    self.test_current_policy()
 
-                        self._take_iteration(itr, traj_sample_lists)
-                        if self.algorithm.traj_opt.flag_reset:
-                            break
-                        # pol_sample_lists = self._take_policy_samples()
-                        # self._log_data(itr, traj_sample_lists, pol_sample_lists)
-                        if num_pos > 0:
-                            self.algorithm.fit_global_linear_policy(traj_sample_lists)
+                    """ test OLGPS only"""
+                    # if num_pos == position_train.shape[0] - 5:
+                    #     cost1, pos_suc_count1, ee_distance1 = self.test_cost(test_position)
+                    # if num_pos == position_train.shape[0] - 3:
+                    #     cost2, pos_suc_count2, ee_distance2 = self.test_cost(test_position)
+                    # if num_pos == position_train.shape[0] - 1:
+                    #     cost3, pos_suc_count3, ee_distance3 = self.test_cost(test_position)
+                    #
+                    #     ee_distance1 = np.reshape(ee_distance1, (6, ee_distance1.shape[0] / 6))
+                    #     ee_distance2 = np.reshape(ee_distance2, (6, ee_distance2.shape[0] / 6))
+                    #     ee_distance3 = np.reshape(ee_distance3, (6, ee_distance3.shape[0] / 6))
+                    #     self.data_logger.pickle('all_distance_3.pkl', ee_distance3)
+                    #     self.data_logger.pickle('./position/all_distance_3.pkl', ee_distance3)
+                    #     self.data_logger.pickle('./position/all_distance_2.pkl', ee_distance2)
+                    #     self.data_logger.pickle('./position/all_distance_1.pkl', ee_distance1)
+                    #     self.data_logger.pickle('./position/all_cost_3.pkl', cost3)
+                    #     self.data_logger.pickle('./position/all_cost_2.pkl', cost2)
+                    #     self.data_logger.pickle('./position/all_cost_1.pkl', cost1)
+                    #     self.data_logger.pickle('./position/all_suc_3.pkl', pos_suc_count3)
+                    #     self.data_logger.pickle('./position/all_suc_2.pkl', pos_suc_count2)
+                    #     self.data_logger.pickle('./position/all_suc_1.pkl', pos_suc_count1)
 
-                    if not self.algorithm.traj_opt.flag_reset:
-                        # train NN with good samples
-                        self.algorithm.policy_opt.update(train_obs_data, train_mu, train_prc, train_wt)
-                        # test the trained in the current position
-                        print('test current policy.....')
-                        self.test_current_policy()
-                        # print('test all testing position....')
-                        # for i in xrange(position_train.shape[0]):
-                        #     test_positions = self.generate_position_radius(position_train[i], 0.03, 5, 0.01)
-                        #     if i == 0:
-                        #         all_test_positions = test_positions
-                        #     else:
-                        #         all_test_positions = np.concatenate((all_test_positions, test_positions))
-                        # self.test_cost(all_test_positions)
+                    if num_pos == position_train.shape[0]-1:
+                        cost, pos_suc_count1, ee_distance = self.test_cost(test_position)
+                    self.data_logger.pickle('./position/all_distance_withou_alpha.pkl', ee_distance)
 
-                    # reset the algorithm to the initial algorithm for the next position
-                    # del self.algorithm
-                    # config['algorithm']['agent'] = self.agent
-                    # self.algorithm = config['algorithm']['type'](config['algorithm'])
-                    else:
-                        flag_fail = True
-                        skip_pos.append(['%d_%d_%d' % (test_num, test_itr, num_pos)])
-                    self.algorithm.reset_alg()
-                    self.next_iteration_prepare()
+                    self.data_logger.pickle('./position/all_train_position.pkl', all_position_train)
+                    self.data_logger.pickle('./position/all_test_position.pkl', test_position)
 
-                print('test all testing position....')
-                test_positions = self.generate_position_radius(center_position, radius, 100, 0.01)
-                cost, suc, distance = self.test_cost(test_positions)
-                self.data_logger.pickle('./result/cost_%d' % itr_count, cost)
-                self.data_logger.pickle('./result/distance_%d' % itr_count, distance)
-                self.data_logger.pickle('./result/suc_%d' % itr_count, suc)
 
-                self.data_logger.pickle('./result/train_pos_%d' % itr_count, position_train)
-                self.data_logger.pickle('./result/test_pos_%d' % itr_count, test_positions)
-                self.data_logger.pickle('./result/skip_pos', skip_pos)
+                else:
+                    print("a o!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                    # raw_input()
 
-                del self.algorithm
-                config['algorithm']['agent'] = self.agent
-                self.algorithm = config['algorithm']['type'](config['algorithm'])
-                print("skip position:", skip_pos)
+                self.algorithm.reset_alg()
+                self.next_iteration_prepare()
+
+            # reset the algorithm to the initial algorithm for the next position
+            # del self.algorithm
+            # config['algorithm']['agent'] = self.agent
+            # self.algorithm = config['algorithm']['type'](config['algorithm'])
+            # self.algorithm.reset_alg()
+            # self.next_iteration_prepare()
+
+
+
+        print("finish......")
+        """ test OLGPS only"""
+        # ee_distance1 = np.reshape(ee_distance1, (6, ee_distance1.shape[0] / 6))
+        # ee_distance2 = np.reshape(ee_distance2, (6, ee_distance2.shape[0] / 6))
+        # ee_distance3 = np.reshape(ee_distance3, (6, ee_distance3.shape[0] / 6))
+        # self.data_logger.pickle('all_distance_3.pkl', ee_distance3)
+        # self.data_logger.pickle('./position/all_distance_3.pkl', ee_distance3)
+        # self.data_logger.pickle('./position/all_distance_2.pkl', ee_distance2)
+        # self.data_logger.pickle('./position/all_distance_1.pkl', ee_distance1)
+        # self.data_logger.pickle('./position/all_cost_3.pkl', cost3)
+        # self.data_logger.pickle('./position/all_cost_2.pkl', cost2)
+        # self.data_logger.pickle('./position/all_cost_1.pkl', cost1)
+        # self.data_logger.pickle('./position/all_suc_3.pkl', pos_suc_count3)
+        # self.data_logger.pickle('./position/all_suc_2.pkl', pos_suc_count2)
+        # self.data_logger.pickle('./position/all_suc_1.pkl', pos_suc_count1)
 
         self._end()
+
+    def generate_test_position(self):
+        """
+        generate special test positions
+        Returns:
+
+        """
+        center_position = 0.02
+        radius = 0.02
+        max_error_bound = 0.02
+        for pos_count in range(6):
+            position = self.generate_position(center_position, radius, 30, max_error_bound)
+            if pos_count == 0:
+                all_positions = position
+            else:
+                all_positions = np.concatenate((all_positions, position), axis=0)
+            center_position = center_position + radius * 2
+
+        return all_positions
 
     def position_shuffle(self, positions, sort_idx):
         """
@@ -296,6 +330,52 @@ class GPSMain(object):
         # print('all_position:', all_positions)
         return all_positions
 
+    def generate_position(self, cposition, radius, conditions, max_error_bound):
+        """
+
+        Args:
+            cposition:  center position
+            radius:     area radius
+            conditions: the quantity of generated posion
+            max_error_bound:
+
+        Returns:
+            positions
+
+        """
+        while True:
+            all_positions = np.array([cposition, -cposition, 0])
+            center_position = np.array([cposition, -cposition, 0])
+            for i in range(conditions):
+                position = np.random.uniform(cposition - radius, cposition + radius, 3)
+                while True:
+                    position[2] = 0
+                    position[1] = -position[1]
+                    area = (position - center_position).dot(position - center_position)
+                    # area = np.sum(np.multiply(position - center_position, position - center_position))
+                    if area <= radius ** 2:
+                        # print(area)
+                        break
+                    position = np.random.uniform(cposition - radius, cposition + radius, 3)
+                position = np.floor(position * 1000) / 1000.0
+                all_positions = np.concatenate((all_positions, position))
+            all_positions = np.reshape(all_positions, [all_positions.shape[0] / 3, 3])
+            # print(all_positions[:, 1])
+            # print('mean:')
+            # print(np.mean(all_positions, axis=0))
+            mean_position = np.mean(all_positions, axis=0)
+            # mean_error1 = np.fabs(mean_position[0] - 0.11)
+            # mean_error2 = np.fabs(mean_position[1] + 0.11)
+            mean_error1 = np.fabs(mean_position[0] - (cposition - max_error_bound))
+            mean_error2 = np.fabs(mean_position[1] + (cposition - max_error_bound))
+            if mean_error1 < max_error_bound and mean_error2 < max_error_bound:
+                print('mean:')
+                print(np.mean(all_positions, axis=0))
+                break
+        # print(all_positions)
+        # print(all_positions.shape)
+        return all_positions
+
     def test_cost(self, position):
         """
         test the NN policy at all position
@@ -327,6 +407,38 @@ class GPSMain(object):
             total_distance = np.concatenate((total_distance, np.array([distance])))
         # return np.mean(total_costs), total_suc, total_distance
         return total_costs, total_suc, total_distance
+
+    def test_old_cost(self, position):
+        """
+        test the NN policy at all position
+        Args:
+            position:
+
+        Returns:
+
+        """
+        total_costs = np.zeros(0)
+        total_distance = np.zeros(0)
+        total_suc = np.zeros(0)
+        print 'calculate cost_________________'
+        for itr in range(position.shape[0]):
+            if itr % 51 == 0:
+                print('****************')
+            for cond in self._train_idx:
+                self._hyperparams['agent']['pos_body_offset'][cond] = position[itr]
+            self.agent.reset_model(self._hyperparams)
+            _, cost, ee_points = self.take_nn_samples()
+            ee_error = ee_points[:3] - self.target_points
+            distance = np.sqrt(ee_error.dot(ee_error))
+            error = np.sum(np.fabs(ee_error))
+            if (error < 0.06):
+                total_suc = np.concatenate((total_suc, np.array([1])))
+            else:
+                total_suc = np.concatenate((total_suc, np.array([0])))
+            total_costs = np.concatenate((total_costs, np.array(cost)))
+            total_distance = np.concatenate((total_distance, np.array([distance])))
+        # return np.mean(total_costs), total_suc, total_distance
+        return np.mean(total_costs), total_suc, total_distance
 
     def next_iteration_prepare(self):
         """
@@ -588,7 +700,7 @@ class GPSMain(object):
             Args:
                 N  : number of policy samples to take per condition
             Returns: None
-            """
+        """
 
         if 'verbose_policy_trials' not in self._hyperparams:
             # AlgorithmTrajOpt
