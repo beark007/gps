@@ -189,7 +189,10 @@ class GPSMain(object):
 
                     flag_fail = False
                     # train NN with good samples
-                    self.algorithm.policy_opt.update(train_obs_data, train_mu, train_prc, train_wt)
+                    if num_pos == 0:
+                        self.algorithm.policy_opt.update(train_obs_data, train_mu, train_prc, train_wt)
+                    else:
+                        self.algorithm.policy_opt.update_ewc(train_obs_data, train_mu, train_prc, train_wt)
                     # test the trained in the current position
                     print('test current policy.....')
                     self.test_current_policy()

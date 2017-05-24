@@ -44,6 +44,10 @@ class PolicyOptTf(PolicyOpt):
         self.action_tensor = None  # mu true
         self.solver = None
         self.feat_vals = None
+
+        self.fisher_info = list()   # fisher information for each condition
+        self.var_lists = None   # variables of NN
+
         self.init_network()
         self.init_solver()
         self.var = self._hyperparams['init_var'] * np.ones(dU)
@@ -64,6 +68,59 @@ class PolicyOptTf(PolicyOpt):
         init_op = tf.global_variables_initializer()
         self.sess.run(init_op)
 
+    def compute_fisher_info(self, obs, obs_idx):
+        """
+        compute fisher information
+        sess:
+        obs: the observation
+        obs_idx: the shuffle idx
+        """
+        #
+        #wait to add
+
+        num_samples = 10
+        # initialize Fisher information for most recent task
+        self.F_mat = []
+        for v in range(len(self.var_lists)):
+            self.F_mat.append(np.zeros(self.var_lists[v].get_shape().as_list()))
+
+        # calculate the problem
+        probs = tf.nn.softmax(self.act_op) # the output of NN
+
+        # calculate the fisher information with samples
+        import time
+        for i in range(num_samples):
+
+            idx = obs_idx[i:i+1]
+            # compute first-order derivatives
+            ders_list = list()
+            print('act_dimension:', self.act_op.get_shape()[1])
+            print('idx:', idx)
+            time_start = time.time()
+            for act_dim in range(self.act_op.get_shape()[1]):
+                ders_list.append(self.sess.run(tf.gradients(probs[0, act_dim], self.var_lists),
+                                               feed_dict={self.obs_tensor: obs[idx]}))
+            # ders_list = [self.sess.run(tf.gradients(probs[0, act_dim], self.var_lists),
+            #                       feed_dict={self.obs_tensor: obs[idx]}) for act_dim in range(self.act_op.get_shape()[1])]
+
+            time_end = time.time()
+            print('compute %d..., time is %f ms' % (i, (time_end - time_start)))
+            for v in range(len(self.F_mat)):
+                for num_act in range(len(ders_list)):
+                    self.F_mat[v] += np.square(ders_list[num_act][v])
+
+        for v in range(len(self.F_mat)):
+            self.F_mat[v] /= num_samples
+        # while True:
+        #     raw_input()
+        self.fisher_info.append(self.F_mat)
+
+    def keep_pre_vars(self):
+        self.var_lists_pre = []
+        for v in range(len(self.var_lists)):
+            # self.var_lists.append(self.var_lists[v].eval())
+            self.var_lists_pre.append(self.sess.run(self.var_lists[v]))
+
     def init_network(self):
         """ Helper method to initialize the tf networks used """
         tf_map_generator = self._hyperparams['network_model']
@@ -77,6 +134,8 @@ class PolicyOptTf(PolicyOpt):
         self.loss_scalar = tf_map.get_loss_op()
         self.fc_vars = fc_vars
         self.last_conv_vars = last_conv_vars
+
+        self.var_lists = tf_map.get_var_lists_tensor()
 
         # Setup the gradients
         self.grads = [tf.gradients(self.act_op[:,u], self.obs_tensor)[0]
@@ -105,6 +164,8 @@ class PolicyOptTf(PolicyOpt):
         Returns:
             A tensorflow object with updated weights.
         """
+        self.solver.update_loss()
+
         N, T = obs.shape[:2]
         dU, dO = self._dU, self._dO
 
@@ -203,6 +264,127 @@ class PolicyOptTf(PolicyOpt):
         # TODO - Use dense covariance?
         self.var = 1 / np.diag(A)
         self.policy.chol_pol_covar = np.diag(np.sqrt(self.var))
+
+        print('computing fisher information .......')
+        self.compute_fisher_info(obs, idx)
+
+        return self.policy
+
+    def update_ewc(self, obs, tgt_mu, tgt_prc, tgt_wt):
+        """
+        Update policy with ewc loss
+        Args:
+            obs: Numpy array of observations, N x T x dO.
+            tgt_mu: Numpy array of mean controller outputs, N x T x dU.
+            tgt_prc: Numpy array of precision matrices, N x T x dU x dU.
+            tgt_wt: Numpy array of weights, N x T.
+        Returns:
+            A tensorflow object with updated weights.
+        """
+        self.keep_pre_vars()
+        self.solver.update_loss(self.fisher_info, self.var_lists, self.var_lists_pre, 15)
+
+        N, T = obs.shape[:2]
+        dU, dO = self._dU, self._dO
+
+        # TODO - Make sure all weights are nonzero?
+
+        # Save original tgt_prc.
+        tgt_prc_orig = np.reshape(tgt_prc, [N * T, dU, dU])
+
+        # Renormalize weights.
+        tgt_wt *= (float(N * T) / np.sum(tgt_wt))
+        # Allow weights to be at most twice the robust median.
+        mn = np.median(tgt_wt[(tgt_wt > 1e-2).nonzero()])
+        for n in range(N):
+            for t in range(T):
+                tgt_wt[n, t] = min(tgt_wt[n, t], 2 * mn)
+        # Robust median should be around one.
+        tgt_wt /= mn
+
+        # Reshape inputs.
+        obs = np.reshape(obs, (N * T, dO))
+        tgt_mu = np.reshape(tgt_mu, (N * T, dU))
+        tgt_prc = np.reshape(tgt_prc, (N * T, dU, dU))
+        tgt_wt = np.reshape(tgt_wt, (N * T, 1, 1))
+
+        # Fold weights into tgt_prc.
+        tgt_prc = tgt_wt * tgt_prc
+
+        # TODO: Find entries with very low weights?
+
+        # Normalize obs, but only compute normalzation at the beginning.
+        if self.policy.scale is None or self.policy.bias is None:
+            self.policy.x_idx = self.x_idx
+            # 1e-3 to avoid infs if some state dimensions don't change in the
+            # first batch of samples
+            self.policy.scale = np.diag(
+                1.0 / np.maximum(np.std(obs[:, self.x_idx], axis=0), 1e-3))
+            self.policy.bias = - np.mean(
+                obs[:, self.x_idx].dot(self.policy.scale), axis=0)
+        obs[:, self.x_idx] = obs[:, self.x_idx].dot(self.policy.scale) + self.policy.bias
+
+        # Assuming that N*T >= self.batch_size.
+        batches_per_epoch = np.floor(N * T / self.batch_size)
+        idx = range(N * T)
+        average_loss = 0
+        np.random.shuffle(idx)
+
+        if self._hyperparams['fc_only_iterations'] > 0:
+            feed_dict = {self.obs_tensor: obs}
+            num_values = obs.shape[0]
+            conv_values = self.solver.get_last_conv_values(self.sess, feed_dict, num_values, self.batch_size)
+            for i in range(self._hyperparams['fc_only_iterations']):
+                start_idx = int(i * self.batch_size %
+                                (batches_per_epoch * self.batch_size))
+                idx_i = idx[start_idx:start_idx + self.batch_size]
+                feed_dict = {self.last_conv_vars: conv_values[idx_i],
+                             self.action_tensor: tgt_mu[idx_i],
+                             self.precision_tensor: tgt_prc[idx_i]}
+                train_loss = self.solver(feed_dict, self.sess, device_string=self.device_string, use_fc_solver=True)
+                average_loss += train_loss
+
+                if (i + 1) % 500 == 0:
+                    LOGGER.info('tensorflow iteration %d, average loss %f',
+                                i + 1, average_loss / 500)
+                    average_loss = 0
+            average_loss = 0
+
+        # actual training.
+        for i in range(self._hyperparams['iterations']):
+            # Load in data for this batch.
+            start_idx = int(i * self.batch_size %
+                            (batches_per_epoch * self.batch_size))
+            idx_i = idx[start_idx:start_idx + self.batch_size]
+            feed_dict = {self.obs_tensor: obs[idx_i],
+                         self.action_tensor: tgt_mu[idx_i],
+                         self.precision_tensor: tgt_prc[idx_i]}
+            train_loss = self.solver(feed_dict, self.sess, device_string=self.device_string)
+
+            average_loss += train_loss
+            if (i + 1) % 50 == 0:
+                LOGGER.info('tensorflow iteration %d, average loss %f',
+                            i + 1, average_loss / 50)
+                average_loss = 0
+
+        feed_dict = {self.obs_tensor: obs}
+        num_values = obs.shape[0]
+        if self.feat_op is not None:
+            self.feat_vals = self.solver.get_var_values(self.sess, self.feat_op, feed_dict, num_values, self.batch_size)
+        # Keep track of tensorflow iterations for loading solver states.
+        self.tf_iter += self._hyperparams['iterations']
+
+        # Optimize variance.
+        A = np.sum(tgt_prc_orig, 0) + 2 * N * T * \
+                                      self._hyperparams['ent_reg'] * np.ones((dU, dU))
+        A = A / np.sum(tgt_wt)
+
+        # TODO - Use dense covariance?
+        self.var = 1 / np.diag(A)
+        self.policy.chol_pol_covar = np.diag(np.sqrt(self.var))
+
+        print('computing fisher information .......')
+        self.compute_fisher_info(obs, idx)
 
         return self.policy
 

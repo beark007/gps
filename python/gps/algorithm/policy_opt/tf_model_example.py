@@ -48,18 +48,21 @@ def get_mlp_layers(mlp_input, number_layers, dimension_hidden):
     cur_top = mlp_input
     weights = []
     biases = []
+    var_lists = []
     for layer_step in range(0, number_layers):
         in_shape = cur_top.get_shape().dims[1].value
         cur_weight = init_weights([in_shape, dimension_hidden[layer_step]], name='w_' + str(layer_step))
         cur_bias = init_bias([dimension_hidden[layer_step]], name='b_' + str(layer_step))
         weights.append(cur_weight)
         biases.append(cur_bias)
+        var_lists.append(cur_weight)
+        var_lists.append(cur_bias)
         if layer_step != number_layers-1:  # final layer has no RELU
             cur_top = tf.nn.relu(tf.matmul(cur_top, cur_weight) + cur_bias)
         else:
             cur_top = tf.matmul(cur_top, cur_weight) + cur_bias
 
-    return cur_top, weights, biases
+    return cur_top, weights, biases, var_lists
 
 
 def get_loss_layer(mlp_out, action, precision, batch_size):
@@ -84,11 +87,11 @@ def example_tf_network(dim_input=27, dim_output=7, batch_size=25, network_config
 
     # get the placeholder of input, action, precision
     nn_input, action, precision = get_input_layer(dim_input, dim_output)
-    mlp_applied, weights_FC, biases_FC = get_mlp_layers(nn_input, n_layers, dim_hidden)
+    mlp_applied, weights_FC, biases_FC, var_lists = get_mlp_layers(nn_input, n_layers, dim_hidden)
     fc_vars = weights_FC + biases_FC
     loss_out = get_loss_layer(mlp_out=mlp_applied, action=action, precision=precision, batch_size=batch_size)
 
-    return TfMap.init_from_lists([nn_input, action, precision], [mlp_applied], [loss_out]), fc_vars, []
+    return TfMap.init_from_lists([nn_input, action, precision], [mlp_applied], [loss_out], var_lists), fc_vars, []
 
 
 def multi_modal_network(dim_input=27, dim_output=7, batch_size=25, network_config=None):

@@ -13,7 +13,7 @@ class TfMap:
     to make well-defined the tf inputs, outputs, and losses used in the policy_opt_tf class."""
 
     def __init__(self, input_tensor, target_output_tensor,
-                 precision_tensor, output_op, loss_op, fp=None):
+                 precision_tensor, output_op, loss_op, var_lists, fp=None):
         self.input_tensor = input_tensor
         self.target_output_tensor = target_output_tensor
         self.precision_tensor = precision_tensor
@@ -21,14 +21,20 @@ class TfMap:
         self.loss_op = loss_op
         self.img_feat_op = fp
 
+        self.var_lists = var_lists
+
     @classmethod
-    def init_from_lists(cls, inputs, outputs, loss, fp=None):
+    def init_from_lists(cls, inputs, outputs, loss, var_lists, fp=None):
         inputs = check_list_and_convert(inputs)
         outputs = check_list_and_convert(outputs)
         loss = check_list_and_convert(loss)
+        var_lists = check_list_and_convert(var_lists)
         if len(inputs) < 3:  # pad for the constructor if needed.
             inputs += [None]*(3 - len(inputs))
-        return cls(inputs[0], inputs[1], inputs[2], outputs[0], loss[0], fp=fp)
+        return cls(inputs[0], inputs[1], inputs[2], outputs[0], loss[0], var_lists, fp=fp)
+
+    def get_var_lists_tensor(self):
+        return self.var_lists
 
     def get_input_tensor(self):
         return self.input_tensor
@@ -209,11 +215,26 @@ class TfSolver:
         final_values = np.concatenate([values[i] for i in range(len(values))])
         return final_values
 
+    def update_loss(self, fisher_info=None, var_lists=None, var_lists_old=None, lam=None):
+        """
+        update loss when encounter a new condition
+        """
+        if not hasattr(self, "ewc_loss"):
+            self.ewc_loss = self.loss_scalar
+        else:
+            self.ewc_loss = self.loss_scalar
+            for num_task in range(len(fisher_info)):
+                for v in range(len(var_lists)):
+                    self.ewc_loss += (lam/2) * tf.reduce_sum(tf.multiply(fisher_info[num_task][v].astype(np.float32),
+                                                             tf.square(var_lists[v] - var_lists_old[v])))
+
     def __call__(self, feed_dict, sess, device_string="/cpu:0", use_fc_solver=False):
         with tf.device(device_string):
             if use_fc_solver:
-                loss = sess.run([self.loss_scalar, self.fc_solver_op], feed_dict)
+                # loss = sess.run([self.loss_scalar, self.fc_solver_op], feed_dict)
+                loss = sess.run([self.ewc_loss, self.fc_solver_op], feed_dict)
             else:
-                loss = sess.run([self.loss_scalar, self.solver_op], feed_dict)
+                # loss = sess.run([self.loss_scalar, self.solver_op], feed_dict)
+                loss = sess.run([self.ewc_loss, self.solver_op], feed_dict)
             return loss[0]
 

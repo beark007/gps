@@ -5,5 +5,5 @@ This code is a reimplementation of the guided policy search algorithm and LQG-ba
 
 For full documentation, see [rll.berkeley.edu/gps](http://rll.berkeley.edu/gps).
 
-The code base is **a work in progress**. See the [FAQ](http://rll.berkeley.edu/gps/faq.html) for information on planned future additions to the code.
-test for ocfgps
+This code merges [overcoming catastrophic forgeting](https://github.com/ariseff/overcoming-catastrophic) and the main [reference](http://www.inference.vc/comment-on-overcoming-catastrophic-forgetting-in-nns-are-multiple-penalties-needed-2/) 
+
