@@ -231,10 +231,10 @@ class TfSolver:
     def __call__(self, feed_dict, sess, device_string="/cpu:0", use_fc_solver=False):
         with tf.device(device_string):
             if use_fc_solver:
-                # loss = sess.run([self.loss_scalar, self.fc_solver_op], feed_dict)
-                loss = sess.run([self.ewc_loss, self.fc_solver_op], feed_dict)
+                loss = sess.run([self.loss_scalar, self.fc_solver_op], feed_dict)
+                # loss = sess.run([self.ewc_loss, self.fc_solver_op], feed_dict)
             else:
-                # loss = sess.run([self.loss_scalar, self.solver_op], feed_dict)
-                loss = sess.run([self.ewc_loss, self.solver_op], feed_dict)
+                loss = sess.run([self.loss_scalar, self.solver_op], feed_dict)
+                # loss = sess.run([self.ewc_loss, self.solver_op], feed_dict)
             return loss[0]
 

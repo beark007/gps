@@ -70,7 +70,7 @@ def get_loss_layer(mlp_out, action, precision, batch_size):
     return euclidean_loss_layer(a=action, b=mlp_out, precision=precision, batch_size=batch_size)
 
 
-def example_tf_network(dim_input=27, dim_output=7, batch_size=25, network_config=None):
+def tf_network(dim_input=27, dim_output=7, batch_size=25, network_config=None):
     """
     An example of how one might want to specify a network in tensorflow.
 
@@ -81,8 +81,8 @@ def example_tf_network(dim_input=27, dim_output=7, batch_size=25, network_config
     Returns:
         a TfMap object used to serialize, inputs, outputs, and loss.
     """
-    n_layers = 2
-    dim_hidden = (n_layers - 1) * [40]
+    n_layers = 3
+    dim_hidden = (n_layers - 1) * [42]
     dim_hidden.append(dim_output)
 
     # get the placeholder of input, action, precision

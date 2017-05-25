@@ -78,7 +78,7 @@ class PolicyOptTf(PolicyOpt):
         #
         #wait to add
 
-        num_samples = 10
+        num_samples = 100
         # initialize Fisher information for most recent task
         self.F_mat = []
         for v in range(len(self.var_lists)):
@@ -164,8 +164,6 @@ class PolicyOptTf(PolicyOpt):
         Returns:
             A tensorflow object with updated weights.
         """
-        self.solver.update_loss()
-
         N, T = obs.shape[:2]
         dU, dO = self._dU, self._dO
 
@@ -265,12 +263,9 @@ class PolicyOptTf(PolicyOpt):
         self.var = 1 / np.diag(A)
         self.policy.chol_pol_covar = np.diag(np.sqrt(self.var))
 
-        print('computing fisher information .......')
-        self.compute_fisher_info(obs, idx)
-
         return self.policy
 
-    def update_ewc(self, obs, tgt_mu, tgt_prc, tgt_wt):
+    def update_ewc(self, obs, tgt_mu, tgt_prc, tgt_wt, with_ewc=False):
         """
         Update policy with ewc loss
         Args:
@@ -281,8 +276,11 @@ class PolicyOptTf(PolicyOpt):
         Returns:
             A tensorflow object with updated weights.
         """
-        self.keep_pre_vars()
-        self.solver.update_loss(self.fisher_info, self.var_lists, self.var_lists_pre, 15)
+        if with_ewc:
+            self.keep_pre_vars()
+            self.solver.update_loss(self.fisher_info, self.var_lists, self.var_lists_pre, 15)
+        else:
+            self.solver.update_loss()
 
         N, T = obs.shape[:2]
         dU, dO = self._dU, self._dO
