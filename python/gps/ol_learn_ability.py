@@ -195,41 +195,33 @@ class GPSMain(object):
                     self.test_current_policy()
 
                     """ test OLGPS only"""
-                    if num_pos == position_train.shape[0] - 5:
-                        cost1, pos_suc_count1, ee_distance1 = self.test_cost(test_position)
-                    #     self.data_logger.pickle('./position/all_distance_1.pkl', ee_distance1)
-                    #     break
-                    if num_pos == position_train.shape[0] - 3:
-                        cost2, pos_suc_count2, ee_distance2 = self.test_cost(test_position)
-                    if num_pos == position_train.shape[0] - 1:
-                        cost3, pos_suc_count3, ee_distance3 = self.test_cost(test_position)
-
-                        ee_distance1 = np.reshape(ee_distance1, (6, ee_distance1.shape[0] / 6))
-                        ee_distance2 = np.reshape(ee_distance2, (6, ee_distance2.shape[0] / 6))
-                        ee_distance3 = np.reshape(ee_distance3, (6, ee_distance3.shape[0] / 6))
-                        self.data_logger.pickle('all_distance_3.pkl', ee_distance3)
-                        self.data_logger.pickle('./position/all_distance_3.pkl', ee_distance3)
-                        self.data_logger.pickle('./position/all_distance_2.pkl', ee_distance2)
-                        self.data_logger.pickle('./position/all_distance_1.pkl', ee_distance1)
-                        self.data_logger.pickle('./position/all_cost_3.pkl', cost3)
-                        self.data_logger.pickle('./position/all_cost_2.pkl', cost2)
-                        self.data_logger.pickle('./position/all_cost_1.pkl', cost1)
-                        self.data_logger.pickle('./position/all_suc_3.pkl', pos_suc_count3)
-                        self.data_logger.pickle('./position/all_suc_2.pkl', pos_suc_count2)
-                        self.data_logger.pickle('./position/all_suc_1.pkl', pos_suc_count1)
-
-                    # if num_pos == position_train.shape[0]-5:
-                    #     cost, pos_suc_count1, ee_distance = self.test_cost(test_position)
-                    #     self.data_logger.pickle('./position/all_distance_1.pkl', ee_distance)
+                    test_position = self.data_logger.unpickle('./position/test_position.pkl')
+                    self.test_cost(test_position)
+                    # if num_pos == position_train.shape[0] - 5:
+                    #     cost1, pos_suc_count1, ee_distance1 = self.test_cost(test_position)
+                    # #     self.data_logger.pickle('./position/all_distance_1.pkl', ee_distance1)
+                    # #     break
                     # if num_pos == position_train.shape[0] - 3:
-                    #     cost, pos_suc_count1, ee_distance = self.test_cost(test_position)
-                    #     self.data_logger.pickle('./position/all_distance_2.pkl', ee_distance)
+                    #     cost2, pos_suc_count2, ee_distance2 = self.test_cost(test_position)
                     # if num_pos == position_train.shape[0] - 1:
-                    #     cost, pos_suc_count1, ee_distance = self.test_cost(test_position)
-                    #     self.data_logger.pickle('./position/all_distance_3.pkl', ee_distance)
-
-                        self.data_logger.pickle('./position/all_train_position.pkl', all_position_train)
-                        self.data_logger.pickle('./position/all_test_position.pkl', test_position)
+                    #     cost3, pos_suc_count3, ee_distance3 = self.test_cost(test_position)
+                    #
+                    #     ee_distance1 = np.reshape(ee_distance1, (6, ee_distance1.shape[0] / 6))
+                    #     ee_distance2 = np.reshape(ee_distance2, (6, ee_distance2.shape[0] / 6))
+                    #     ee_distance3 = np.reshape(ee_distance3, (6, ee_distance3.shape[0] / 6))
+                    #     self.data_logger.pickle('all_distance_3.pkl', ee_distance3)
+                    #     self.data_logger.pickle('./position/all_distance_3.pkl', ee_distance3)
+                    #     self.data_logger.pickle('./position/all_distance_2.pkl', ee_distance2)
+                    #     self.data_logger.pickle('./position/all_distance_1.pkl', ee_distance1)
+                    #     self.data_logger.pickle('./position/all_cost_3.pkl', cost3)
+                    #     self.data_logger.pickle('./position/all_cost_2.pkl', cost2)
+                    #     self.data_logger.pickle('./position/all_cost_1.pkl', cost1)
+                    #     self.data_logger.pickle('./position/all_suc_3.pkl', pos_suc_count3)
+                    #     self.data_logger.pickle('./position/all_suc_2.pkl', pos_suc_count2)
+                    #     self.data_logger.pickle('./position/all_suc_1.pkl', pos_suc_count1)
+                    #
+                    #     self.data_logger.pickle('./position/all_train_position.pkl', all_position_train)
+                    #     self.data_logger.pickle('./position/all_test_position.pkl', test_position)
 
 
                 else:
