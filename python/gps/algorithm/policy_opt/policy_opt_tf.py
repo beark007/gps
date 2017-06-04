@@ -84,7 +84,7 @@ class PolicyOptTf(PolicyOpt):
         for v in range(len(self.var_lists)):
             self.F_mat.append(np.zeros(self.var_lists[v].get_shape().as_list()))
 
-        # calculate the problem
+        # calculate the probability
         probs = tf.nn.softmax(self.act_op) # the output of NN
 
         # calculate the fisher information with samples
@@ -276,11 +276,13 @@ class PolicyOptTf(PolicyOpt):
         Returns:
             A tensorflow object with updated weights.
         """
-        if with_ewc:
-            self.keep_pre_vars()
-            self.solver.update_loss(self.fisher_info, self.var_lists, self.var_lists_pre, 15)
-        else:
-            self.solver.update_loss()
+        # if with_ewc:
+        #     self.keep_pre_vars()
+        #     self.solver.update_loss(self.fisher_info, self.var_lists, self.var_lists_pre, 15)
+        # else:
+        #     self.solver.update_loss()
+
+        self.solver.update_loss()
 
         N, T = obs.shape[:2]
         dU, dO = self._dU, self._dO

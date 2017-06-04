@@ -144,9 +144,6 @@ def main():
     #                             np.array([0.15, -0.15, 0]), np.array([0.181, -0.181, 0])
     #                             ])
 
-    init_positions = generate_position(0.02, -0.02, 0.02, 4, 0.001)
-    init_positions2 = generate_position(0.10, -0.10, 0.02, 2, 0.01)
-    init_positions3 = generate_position(0.18, -0.18, 0.02, 2, 0.01)
     # train_positions = np.array([init_positions[0],
     #                             init_positions[1],
     #                             init_positions[2],
@@ -157,15 +154,15 @@ def main():
     #                             init_positions3[0]
     #                             ])
 
-    train_positions = np.array([np.array([0.0, 0.0, 0.0]),
-                                np.array([0.04, 0, 0]),
-                                np.array([0, -0.04, 0]),
-                                np.array([0.04, -0.04, 0]),
-                                np.array([0.07, -0.07, 0]),
-                                np.array([0.10, -0.10, 0]),
-                                np.array([0.15, -0.15, 0]),
-                                np.array([0.18, -0.18, 0])
-                                ])
+    # train_positions = np.array([np.array([0.0, 0.0, 0.0]),
+    #                             np.array([0.04, 0, 0]),
+    #                             np.array([0, -0.04, 0]),
+    #                             np.array([0.04, -0.04, 0]),
+    #                             np.array([0.07, -0.07, 0]),
+    #                             np.array([0.10, -0.10, 0]),
+    #                             np.array([0.15, -0.15, 0]),
+    #                             np.array([0.18, -0.18, 0])
+    #                             ])
 
     # train_positions = np.array([np.array([0, 0, 0]), np.array([bas_pos, -bas_pos, 0]),
     #                             np.array([0, -bas_pos, 0]),
@@ -176,7 +173,7 @@ def main():
     # # train_positions = np.array([np.array([0.03, -0.03, 0]), np.array([-0.03, 0.03, 0]), np.array([0.181, -0.181, 0]),
     # #                       np.array([0.101, -0.101, 0]), np.array([0.241, -0.241, 0])])
     # print(train_positions)
-    file_pickle('./position/position_train.pkl', train_positions)
+    # file_pickle('./position/position_train.pkl', train_positions)
 
     # test_positions
     # test_positions = generate_position(args.center_position, -args.center_position, args.radius, args.test_time, max_error_bound)
@@ -236,6 +233,23 @@ def main():
     # file_pickle('./position/test_position_%d.pkl' % (idx_pos+5), test_position)
     # test_position = generate_position(0.2, 0.2, 0.200, 100, 0.05)
     # file_pickle('./position/test_position_%d.pkl' % (idx_pos+6), test_position)
+
+    """
+    test the ofcgps
+    """
+    train_positions = np.array([np.array([0.05, -0.05, 0.0]),
+                                np.array([0.35, -0.05, 0.0]),
+                                np.array([0.05, -0.35, 0.0]),
+                                np.array([0.25, -0.25, 0.0]),
+                                ])
+    file_pickle('./position/position_train.pkl', train_positions)
+
+    test_position1 = generate_position(0.05, 0.05, 0.030, 30, 0.005)
+    test_position2 = generate_position(0.35, 0.05, 0.030, 30, 0.005)
+    test_position3 = generate_position(0.05, 0.35, 0.030, 30, 0.005)
+    test_position4 = generate_position(0.25, 0.25, 0.030, 30, 0.005)
+    test_position = np.concatenate((test_position1, test_position2, test_position3, test_position4), axis=0)
+    file_pickle('./position/test_position.pkl', test_position)
 
 
 if __name__ == '__main__':
