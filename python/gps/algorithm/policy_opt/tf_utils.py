@@ -133,12 +133,15 @@ class TfSolver:
     """ A container for holding solver hyperparams in tensorflow. Used to execute backwards pass. """
     def __init__(self, loss_scalar, solver_name='adam', base_lr=None, lr_policy=None,
                  momentum=None, weight_decay=None, fc_vars=None,
-                 last_conv_vars=None, vars_to_opt=None):
+                 last_conv_vars=None, vars_to_opt=None, summery=None):
         self.base_lr = base_lr
         self.lr_policy = lr_policy
         self.momentum = momentum
         self.solver_name = solver_name
         self.loss_scalar = loss_scalar
+
+        self.summery = summery
+
         if self.lr_policy != 'fixed':
             raise NotImplementedError('learning rate policies other than fixed are not implemented')
 
@@ -219,22 +222,25 @@ class TfSolver:
         """
         update loss when encounter a new condition
         """
-        if not hasattr(self, "ewc_loss"):
-            self.ewc_loss = self.loss_scalar
+        if fisher_info:
+            if not hasattr(self, "ewc_loss"):
+                self.ewc_loss = self.loss_scalar
+            else:
+                self.ewc_loss = self.loss_scalar
+                for num_task in range(len(fisher_info)):
+                    for v in range(len(var_lists)):
+                        self.ewc_loss += (lam/2) * tf.reduce_sum(tf.multiply(fisher_info[num_task][v].astype(np.float32),
+                                                                 tf.square(var_lists[v] - var_lists_old[v])))
         else:
             self.ewc_loss = self.loss_scalar
-            for num_task in range(len(fisher_info)):
-                for v in range(len(var_lists)):
-                    self.ewc_loss += (lam/2) * tf.reduce_sum(tf.multiply(fisher_info[num_task][v].astype(np.float32),
-                                                             tf.square(var_lists[v] - var_lists_old[v])))
 
     def __call__(self, feed_dict, sess, device_string="/cpu:0", use_fc_solver=False):
         with tf.device(device_string):
             if use_fc_solver:
-                loss = sess.run([self.loss_scalar, self.fc_solver_op], feed_dict)
-                # loss = sess.run([self.ewc_loss, self.fc_solver_op], feed_dict)
+                # loss = sess.run([self.loss_scalar, self.fc_solver_op], feed_dict)
+                loss = sess.run([self.ewc_loss, self.fc_solver_op, self.summery], feed_dict)
             else:
-                loss = sess.run([self.loss_scalar, self.solver_op], feed_dict)
-                # loss = sess.run([self.ewc_loss, self.solver_op], feed_dict)
-            return loss[0]
+                # loss = sess.run([self.loss_scalar, self.solver_op], feed_dict)
+                loss = sess.run([self.ewc_loss, self.solver_op, self.summery], feed_dict)
+            return loss[0], loss[2]
 

@@ -50,17 +50,20 @@ def get_mlp_layers(mlp_input, number_layers, dimension_hidden):
     biases = []
     var_lists = []
     for layer_step in range(0, number_layers):
-        in_shape = cur_top.get_shape().dims[1].value
-        cur_weight = init_weights([in_shape, dimension_hidden[layer_step]], name='w_' + str(layer_step))
-        cur_bias = init_bias([dimension_hidden[layer_step]], name='b_' + str(layer_step))
-        weights.append(cur_weight)
-        biases.append(cur_bias)
-        var_lists.append(cur_weight)
-        var_lists.append(cur_bias)
-        if layer_step != number_layers-1:  # final layer has no RELU
-            cur_top = tf.nn.relu(tf.matmul(cur_top, cur_weight) + cur_bias)
-        else:
-            cur_top = tf.matmul(cur_top, cur_weight) + cur_bias
+        with tf.name_scope('layer_' + str(layer_step)):
+            in_shape = cur_top.get_shape().dims[1].value
+            cur_weight = init_weights([in_shape, dimension_hidden[layer_step]], name='w_' + str(layer_step))
+            cur_bias = init_bias([dimension_hidden[layer_step]], name='b_' + str(layer_step))
+            weights.append(cur_weight)
+            biases.append(cur_bias)
+            var_lists.append(cur_weight)
+            var_lists.append(cur_bias)
+            tf.summary.histogram("weights", cur_weight)
+            tf.summary.histogram("biases", cur_bias)
+            if layer_step != number_layers-1:  # final layer has no RELU
+                cur_top = tf.nn.relu(tf.matmul(cur_top, cur_weight) + cur_bias)
+            else:
+                cur_top = tf.matmul(cur_top, cur_weight) + cur_bias
 
     return cur_top, weights, biases, var_lists
 
