@@ -1,5 +1,6 @@
 import tensorflow as tf
 import numpy as np
+import time
 
 
 def check_list_and_convert(the_object):
@@ -169,6 +170,8 @@ class TfSolver:
             var_list = tf.trainable_variables()
         if loss is None:
             loss = self.loss_scalar
+
+
         if solver_string == 'adam':
             return tf.train.AdamOptimizer(learning_rate=self.base_lr,
                                           beta1=self.momentum).minimize(loss, var_list=var_list)
@@ -185,6 +188,7 @@ class TfSolver:
             return tf.train.GradientDescentOptimizer(learning_rate=self.base_lr).minimize(loss, var_list=var_list)
         else:
             raise NotImplementedError("Please select a valid optimizer.")
+
 
     def get_last_conv_values(self, sess, feed_dict, num_values, batch_size):
         i = 0
@@ -218,7 +222,7 @@ class TfSolver:
         final_values = np.concatenate([values[i] for i in range(len(values))])
         return final_values
 
-    def update_loss(self, fisher_info=None, var_lists=None, var_lists_old=None, lam=None):
+    def update_loss(self,fisher_info=None, var_lists=None, var_lists_old=None, lam=None):
         """
         update loss when encounter a new condition
         """
@@ -234,13 +238,38 @@ class TfSolver:
         else:
             self.ewc_loss = self.loss_scalar
 
+        """ update the train loss"""
+
+    def restore(self, sess, var_list):
+        self.star_vars = []
+        for v in range(len(var_list)):
+            self.star_vars.append(var_list[v].eval())
+
+        if hasattr(self, "star_vars"):
+            for v in range(len(var_list)):
+                sess.run(var_list[v].assign(self.star_vars[v]))
+
+    def reset_solver_op(self, loss, var_lists):
+        """ using Adam as default optimizer"""
+        return tf.train.AdamOptimizer(learning_rate=self.base_lr,
+                                      beta1=self.momentum).minimize(loss, var_list=var_lists)
+
+
     def __call__(self, feed_dict, sess, device_string="/cpu:0", use_fc_solver=False):
         with tf.device(device_string):
             if use_fc_solver:
                 # loss = sess.run([self.loss_scalar, self.fc_solver_op], feed_dict)
                 loss = sess.run([self.ewc_loss, self.fc_solver_op, self.summery], feed_dict)
+                # with sess.as_default:
+                #     self.solver_op.run(session=sess, feed_dict=feed_dict)
+                #     loss = sess.run([self.ewc_loss, self.summery], feed_dict)
+                print('using fc solver')
             else:
                 # loss = sess.run([self.loss_scalar, self.solver_op], feed_dict)
                 loss = sess.run([self.ewc_loss, self.solver_op, self.summery], feed_dict)
-            return loss[0], loss[2]
+                # with sess.as_default:
+                #     self.solver_op.run(feed_dict=feed_dict)
+                #     loss = sess.run([self.ewc_loss, self.summery], feed_dict)
+                # print('not using fc solver')
+            return loss[0], loss[1]
 

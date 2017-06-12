@@ -79,9 +79,18 @@ class GPSMain(object):
         # train_wt = self.data_logger.unpickle('./position/wt_0.pkl')
 
         """ load test position"""
-        test_position = self.data_logger.unpickle('./position/test_position.pkl')
+        # test_position = self.data_logger.unpickle('./position/test_position.pkl')
+        test_idxs = [2,3]
+        test_position = np.zeros(0)
+        for test_idx in test_idxs:
+            test_data = self.data_logger.unpickle('./position/test_position_%d.pkl' % test_idx)
+            if len(test_position.shape) != 2:
+                test_position = test_data
+            else:
+                test_position = np.concatenate((test_position, test_data), axis=0)
 
-        for num_pos in range(2):
+        count_compute = 0
+        for num_pos in range(1, 4):
             """ load data"""
             train_mu = self.data_logger.unpickle('./position/mu_%d.pkl' % num_pos)
             train_obs_data = self.data_logger.unpickle('./position/obs_%d.pkl' % num_pos)
@@ -92,22 +101,24 @@ class GPSMain(object):
             """ train NN"""
             # self.algorithm.policy_opt.update(train_obs_data, train_mu, train_prc, train_wt)
 
-            if num_pos == 0:
+            if count_compute == 0:
                 self.algorithm.policy_opt.update_ewc(train_obs_data, train_mu, train_prc, train_wt,
                                                      with_ewc=False, compute_fisher=True, with_traj=True)
             else:
                 self.algorithm.policy_opt.update_ewc(train_obs_data, train_mu, train_prc, train_wt,
-                                                     with_ewc=True)
+                                                     with_ewc=True, compute_fisher=False, with_traj=True)
 
             """ test current policy"""
-            self.test_current_policy()
+            # self.test_current_policy()
 
             """ test NN in different positions"""
-            if num_pos > 0:
+            if count_compute > 1:
                 cost, pos_suc_count, ee_distance = self.test_cost(test_position)
             # self.data_logger.pickle('./position/all_distance_%d.pkl' % num_pos, ee_distance)
             # self.data_logger.pickle('./position/all_cost_%d.pkl' % num_pos, cost)
             # self.data_logger.pickle('./position/all_suc_count_%d.pkl' % num_pos, pos_suc_count)
+
+            count_compute += 1
 
         self._end()
 

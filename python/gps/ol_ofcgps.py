@@ -99,8 +99,8 @@ class GPSMain(object):
         # test_position = self.data_logger.unpickle('./position/all_test_position.pkl')
         all_position_train = np.zeros(position_train.shape)
 
-        # for num_pos in range(position_train.shape[0]):
-        for num_pos in range(2):
+        for num_pos in range(position_train.shape[0]):
+        # for num_pos in range(2):
             """ load train position and reset agent model. """
             flag_fail = True
             while(flag_fail):
@@ -173,10 +173,16 @@ class GPSMain(object):
                             save_prc = tgt_prc[0, :, :, :]
                             save_obs = obs_data[0, :, :]
                             save_wt = tgt_wt[0, :]
+                            save_K = self.algorithm.cur[0].traj_distr.K
+                            save_k = self.algorithm.cur[0].traj_distr.k
+                            save_covar = self.algorithm.cur[0].traj_distr.chol_pol_covar
                             np.save('./position/good_trajectory_mu_%d.npy' % num_pos, save_mu)
                             np.save('./position/good_trajectory_prc_%d.npy' % num_pos, save_prc)
                             np.save('./position/good_trajectory_obs_%d.npy' % num_pos, save_obs)
                             np.save('./position/good_trajectory_wt_%d.npy' % num_pos, save_wt)
+                            np.save('./position/good_trajectory_K_%d.npy' % num_pos, save_K)
+                            np.save('./position/good_trajectory_k_%d.npy' % num_pos, save_k)
+                            np.save('./position/good_trajectory_covar_%d.npy' % num_pos, save_covar)
                             self.data_logger.pickle('./position/good_trajectory_mu_%d.pkl' % num_pos, save_mu)
                             self.data_logger.pickle('./position/good_trajectory_prc_%d.pkl' % num_pos, save_prc)
                             self.data_logger.pickle('./position/good_trajectory_obs_%d.pkl' % num_pos, save_obs)

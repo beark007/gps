@@ -195,6 +195,7 @@ class PolicyOptTf(PolicyOpt):
         # calculate the fisher information with samples
         import time
         for i in range(num_samples):
+        # for i in range(3):
 
             idx = [i]
             # compute first-order derivatives
@@ -235,7 +236,7 @@ class PolicyOptTf(PolicyOpt):
             for v in range(len(self.F_mat)):
                 for num_act in range(len(ders_list)):
                     save_fisher[num_act][v] += np.square(ders_list[num_act][v] / len(ders_list))
-                    self.F_mat[v] += np.square(ders_list[num_act][v]) / len(ders_list)
+                    self.F_mat[v] += np.square(ders_list[num_act][v]) / len(ders_list) * 1E3
 
             """ compute sum of gradient and then square"""
             # for v in range(len(self.F_mat)):
@@ -265,7 +266,7 @@ class PolicyOptTf(PolicyOpt):
             import cPickle as pickle
         except:
             import pickle
-        data_dir = '/home/work/work/gps_imporve/ocfgps/position/'
+        data_dir = '/home/sun/work/ocfgps/position/'
         pickle.dump(save_ders, open(data_dir + 'gradient.pkl', 'wb'))
         pickle.dump(save_action, open(data_dir + 'action.pkl', 'wb'))
         pickle.dump(save_prob, open(data_dir + 'prob.pkl', 'wb'))
@@ -425,6 +426,16 @@ class PolicyOptTf(PolicyOpt):
 
         return self.policy
 
+    def start(self):
+        self.star_var=[]
+        for v in range(len(self.var_lists)):
+            self.star_var.append(self.sess.run(self.var_lists[v]))
+    def restore(self):
+        if hasattr(self, "star_vars"):
+            for v in range(len(self.var_lists)):
+                self.sess.run(self.var_lists[v].assign(self.star_var[v]))
+
+
     def update_ewc(self, obs, tgt_mu, tgt_prc, tgt_wt,
                    with_ewc=False, compute_fisher=False, with_traj=False):
         """
@@ -438,8 +449,14 @@ class PolicyOptTf(PolicyOpt):
             A tensorflow object with updated weights.
         """
         if with_ewc:
-            self.keep_pre_vars()
-            self.solver.update_loss(self.fisher_info, self.var_lists, self.var_lists_pre, 2)
+            # self.keep_pre_vars()
+            self.start()
+            # self.solver.update_loss(self.fisher_info, self.var_lists, self.var_lists_pre, 15)
+            self.solver.update_loss(self.fisher_info, self.var_lists, self.star_var, 15)
+            # self.solver.solver_op = self.solver.get_solver_op(loss=self.solver.ewc_loss)
+            self.solver.solver_op = self.solver.reset_solver_op(loss=self.solver.ewc_loss, var_lists=self.var_lists)
+            self.sess.run(tf.global_variables_initializer())
+            self.restore()
         else:
             self.solver.update_loss()
 
