@@ -237,24 +237,41 @@ def main():
     """
     test the ofcgps
     """
-    train_positions = np.array([np.array([0.05, -0.05, 0.0]),
-                                np.array([0.35, -0.05, 0.0]),
-                                np.array([0.05, -0.35, 0.0]),
-                                np.array([0.25, -0.25, 0.0]),
+    # train_positions = np.array([np.array([0.05, -0.05, 0.0]),
+    #                             np.array([0.35, -0.05, 0.0]),
+    #                             np.array([0.05, -0.35, 0.0]),
+    #                             np.array([0.25, -0.25, 0.0]),
+    #                             ])
+
+    # test in a line
+    train_positions = np.array([np.array([-0.10, -0.05, 0.0]),
+                                np.array([0.30, -0.05, 0.0]),
+                                np.array([-0.10, -0.25, 0.0]),
+                                np.array([0.30, -0.25, 0.0]),
                                 ])
+    shuffle = [0, 1, 2, 3]
+    train_positions = train_positions[shuffle]
     file_pickle('./position/position_train.pkl', train_positions)
 
-    test_position1 = generate_position(0.05, 0.05, 0.030, 30, 0.005)
-    test_position2 = generate_position(0.35, 0.05, 0.030, 30, 0.005)
-    test_position3 = generate_position(0.05, 0.35, 0.030, 30, 0.005)
-    test_position4 = generate_position(0.25, 0.25, 0.030, 30, 0.005)
+    # test_position1 = generate_position(0.05, 0.05, 0.030, 30, 0.005)
+    # test_position2 = generate_position(0.35, 0.05, 0.030, 30, 0.005)
+    # test_position3 = generate_position(0.05, 0.35, 0.030, 30, 0.005)
+    # test_position4 = generate_position(0.25, 0.25, 0.030, 30, 0.005)
+
+    # test_position1 = generate_position(-0.15, 0.25, 0.030, 30, 0.005)
+    test_position1 = generate_position(-0.10, 0.05, 0.030, 30, 0.005)
+    test_position2 = generate_position(0.30, 0.05, 0.030, 30, 0.005)
+    test_position3 = generate_position(-0.10, 0.25, 0.030, 30, 0.005)
+    test_position4 = generate_position(0.30, 0.25, 0.030, 30, 0.005)
     # test_position = np.concatenate((test_position1, test_position2, test_position3, test_position4), axis=0)
     # print('test_position:', test_position)
-    # file_pickle('./position/test_position.pkl', test_position)
-    file_pickle('./position/test_position_1.pkl', test_position1)
-    file_pickle('./position/test_position_2.pkl', test_position2)
-    file_pickle('./position/test_position_3.pkl', test_position3)
-    file_pickle('./position/test_position_4.pkl', test_position4)
+    test_position = np.concatenate((test_position1, test_position2, test_position3, test_position4), axis=0)
+    # print('test_position:', test_position)
+    file_pickle('./position/test_position.pkl', test_position)
+    file_pickle('./position/test_position_0.pkl', test_position1)
+    file_pickle('./position/test_position_1.pkl', test_position2)
+    file_pickle('./position/test_position_2.pkl', test_position3)
+    file_pickle('./position/test_position_3.pkl', test_position4)
 
 
 

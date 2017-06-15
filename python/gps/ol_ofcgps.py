@@ -159,6 +159,8 @@ class GPSMain(object):
                     print('distance ee:', distance_ee)
 
                     # collect the successful sample to train global policy
+                    if count_suc == 6:
+                        print('123')
                     if distance_ee <= error_acc:
                         flag_suc_peg = True
                         self.adjust_alpha(0.0)
@@ -187,6 +189,9 @@ class GPSMain(object):
                             self.data_logger.pickle('./position/good_trajectory_prc_%d.pkl' % num_pos, save_prc)
                             self.data_logger.pickle('./position/good_trajectory_obs_%d.pkl' % num_pos, save_obs)
                             self.data_logger.pickle('./position/good_trajectory_wt_%d.pkl' % num_pos, save_wt)
+
+                        """ save the successful insertion trajectory """
+                        np.save('./position/step_mu_%d.npy' % count_suc, tgt_mu)
 
 
 
@@ -259,8 +264,16 @@ class GPSMain(object):
                     self.test_current_policy()
 
                     """ test OLGPS only"""
-                    test_position = self.data_logger.unpickle('./position/test_position.pkl')
-                    # cost, pos_suc_count, ee_distance = self.test_cost(test_position)
+                    # test_position = self.data_logger.unpickle('./position/test_position.pkl')
+                    test_position = None
+                    if num_pos == 0:
+                        test_position = self.data_logger.unpickle('./position/test_position_%d.pkl' % (num_pos))
+                    else:
+                        test_position1 = self.data_logger.unpickle('./position/test_position_%d.pkl' % (num_pos - 1))
+                        test_position2 = self.data_logger.unpickle('./position/test_position_%d.pkl' % (num_pos ))
+                        test_position = np.concatenate((test_position1, test_position2), axis=0)
+
+                    cost, pos_suc_count, ee_distance = self.test_cost(test_position)
                     # self.data_logger.pickle('./position/all_distance_%d.pkl' % num_pos, ee_distance)
                     # self.data_logger.pickle('./position/all_cost_%d.pkl' % num_pos, cost)
                     # self.data_logger.pickle('./position/all_suc_count_%d.pkl' % num_pos, pos_suc_count)
@@ -511,11 +524,11 @@ class GPSMain(object):
 
         """
         if val is None:
-            self.alpha1 = 0.8
-            self.alpha2 = 0.2
+            self.alpha1 = 1
+            self.alpha2 = 0
         else:
-            self.alpha1 = 0.8
-            self.alpha2 = 0.2
+            self.alpha1 = 1
+            self.alpha2 = 0
     def pol_alpha(self):
         return self.alpha1, self.alpha2
 

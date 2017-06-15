@@ -172,12 +172,135 @@ def action_visualization(action):
     plot_weight(ax, action)
     plt.show()
 
-data_dir = '/home/sun/work/ocfgps/position/'
-action = data_logger.unpickle(data_dir + 'action.pkl')
-fisher_info = data_logger.unpickle(data_dir + 'fisher.pkl')
-prob = data_logger.unpickle(data_dir + 'prob.pkl')
+# data_dir = '/home/sun/work/ocfgps/position/'
+# action = data_logger.unpickle(data_dir + 'action.pkl')
+# fisher_info = data_logger.unpickle(data_dir + 'fisher.pkl')
+# prob = data_logger.unpickle(data_dir + 'prob.pkl')
+#
+# # action_visualization(action)
+# # action_visualization(prob)
+# # gradient_visualization(fisher_info)
+# fisher_visualization(fisher_info)
 
-# action_visualization(action)
-# action_visualization(prob)
-# gradient_visualization(fisher_info)
-fisher_visualization(fisher_info)
+
+""" visualizing action"""
+def compare_act_nn_traj():
+    """
+    compare action between nn output and the local trajectory
+    """
+    """ load data"""
+    # nn_actions = np.load('./position/nn_trajectory_action_0.npy')
+    # # traj_mus = np.load('./position/good_trajectory_mu_0.npy')
+    # traj_mus = np.load('./position/step_mu_6.npy')
+    # traj_mus = np.mean(traj_mus, axis=0)
+    # traj_obs = np.load('./position/good_trajectory_obs_0.npy')
+    # traj_K = np.load('./position/good_trajectory_K_0.npy')
+    # traj_k = np.load('./position/good_trajectory_k_0.npy')
+    # traj_covar = np.load('./position/good_trajectory_covar_0.npy')
+    #
+    # nn_actions = np.load('./position/ori_save_nn_mu.npy')
+    # traj_mus = np.load('./position/ori_save_mu.npy')
+    #
+    # import os.path
+    # step_idx = 0
+    # while True:
+    #     step_idx = step_idx + 1
+    #     action_file = './position/step_mu_%d.npy' % step_idx
+    #     if os.path.exists(action_file):
+    #         traj_mu = np.load(action_file)
+    #         traj_mu = traj_mu[0, :, :]
+    #         traj_mu = np.expand_dims(traj_mu, axis=0)
+    #         if step_idx == 1:
+    #             traj_mus_mean = traj_mu
+    #         else:
+    #             traj_mus_mean = np.concatenate((traj_mus_mean, traj_mu), axis=0)
+    #     else:
+    #         break
+    # traj_mus_mean = np.mean(traj_mus_mean, axis=0)
+    #
+    # """ calculate u = K*x + k"""
+    # traj_actions = np.zeros(0)
+    # for i in range(traj_k.shape[0]):
+    #     action = traj_K[i].dot(traj_obs[i]) + traj_k[i]
+    #     action = np.expand_dims(action, axis=0)
+    #     if i == 0:
+    #         traj_actions = action
+    #     else:
+    #         traj_actions = np.concatenate((traj_actions, action), axis=0)
+    #
+    # """ concatenate the action in [action, step]"""
+    # plot_action = []
+    # assert traj_actions.shape == nn_actions.shape
+    # for action_idx in range(traj_actions.shape[1]):
+    #
+    #     nn_action = nn_actions[:, action_idx]
+    #     nn_action = np.expand_dims(nn_action, axis=0)
+    #
+    #     traj_action = traj_actions[:, action_idx]
+    #     traj_action = np.expand_dims(traj_action, axis=0)
+    #
+    #     traj_mu = traj_mus[:, action_idx]
+    #     traj_mu = np.expand_dims(traj_mu, axis=0)
+    #
+    #     traj_mu_mean = traj_mus_mean[:, action_idx]
+    #     traj_mu_mean = np.expand_dims(traj_mu_mean, axis=0)
+    #
+    #     plot_action.append(np.concatenate((nn_action, traj_action, traj_mu, traj_mu_mean), axis=0))
+    #
+    # for action_idx in range(traj_actions.shape[1]):
+    #     plt.figure(action_idx)
+    #     ax = plt.gca()
+    #     ax.set_xlabel('number')
+    #     ax.set_xlabel('value')
+    #     ax.set_title('action_%d' % action_idx)
+    #     plot_weight(ax, plot_action[action_idx])
+    # plt.show()
+
+    nn_actions = np.load('./position/ori_save_nn_mu.npy')
+    traj_mus = np.load('./position/ori_save_mu.npy')
+    traj_mus = np.mean(traj_mus, axis=0)
+    nn_actions = np.mean(nn_actions, axis=0)
+
+    plot_action = []
+    for action_idx in range(traj_mus.shape[1]):
+
+        nn_action = nn_actions[:, action_idx]
+        nn_action = np.expand_dims(nn_action, axis=0)
+
+
+        traj_mu = traj_mus[:, action_idx]
+        traj_mu = np.expand_dims(traj_mu, axis=0)
+
+
+        plot_action.append(np.concatenate((nn_action, traj_mu), axis=0))
+
+    for action_idx in range(traj_mus.shape[1]):
+        plt.figure(action_idx)
+        ax = plt.gca()
+        ax.set_xlabel('number')
+        ax.set_xlabel('value')
+        ax.set_title('action_%d' % action_idx)
+        plot_weight(ax, plot_action[action_idx])
+    plt.show()
+
+
+
+
+def cal_prob_nn():
+    """
+    calculate the probability of nn on the standard of local trajectory
+    """
+    """ load data"""
+    nn_actions = np.load('./position/nn_trajectory_action_0.npy')
+    traj_mus = np.load('./position/good_trajectory_mu_0.npy')
+    traj_obs = np.load('./position/good_trajectory_obs_0.npy')
+    traj_K = np.load('./position/good_trajectory_K_0.npy')
+    traj_k = np.load('./position/good_trajectory_k_0.npy')
+    traj_covar = np.load('./position/good_trajectory_covar_0.npy')
+
+    """ construct normal distribution """
+    time_step = traj_K.shape[0]
+
+compare_act_nn_traj()
+
+

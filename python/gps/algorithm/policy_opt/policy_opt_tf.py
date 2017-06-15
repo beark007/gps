@@ -11,12 +11,12 @@ import numpy as np
 
 from gps.algorithm.policy_opt.config import POLICY_OPT_TF
 import tensorflow as tf
+import tensorflow.contrib.distributions as ds
 
 from gps.algorithm.policy.tf_policy import TfPolicy
 from gps.algorithm.policy_opt.policy_opt import PolicyOpt
 from gps.algorithm.policy_opt.tf_utils import TfSolver
 
-import matplotlib.pyplot as plt
 
 
 LOGGER = logging.getLogger(__name__)
@@ -50,6 +50,8 @@ class PolicyOptTf(PolicyOpt):
         self.fisher_info = list()   # fisher information for each condition
         self.var_lists = None   # variables of NN
 
+        self.path_name = '/home/work/work/gps_imporve/ocfgps/'
+
         """ init graph"""
         self.sess = tf.Session()
         """ create a log dir to save the log result"""
@@ -81,6 +83,7 @@ class PolicyOptTf(PolicyOpt):
             i += dim
         init_op = tf.global_variables_initializer()
         self.sess.run(init_op)
+        self.var_saver = tf.train.Saver(self.var_lists)
 
 
 
@@ -88,83 +91,93 @@ class PolicyOptTf(PolicyOpt):
 
         self.num_task = 0 # use for count the number of learnt task
 
-    def compute_fisher_info(self, obs, obs_idx):
-        """
-        compute fisher information
-        sess:
-        obs: the observation
-        obs_idx: the shuffle idx
-        """
-        #
-        #wait to add
-
-        num_samples = 500
-        # initialize Fisher information for most recent task
-        self.F_mat = []
-        for v in range(len(self.var_lists)):
-            self.F_mat.append(np.zeros(self.var_lists[v].get_shape().as_list()))
-
-        F_prev = copy.deepcopy(self.F_mat)
-        mean_diffs = np.zeros(0)
-        ax_len = np.zeros(0)
-
-        # calculate the probability
-        # probs = tf.nn.softmax(self.act_op) # the output of NN
-        probs = self.act_op
-
-        # calculate the fisher information with samples
-        import time
-        for i in range(num_samples):
-
-            idx = obs_idx[i:i+1]
-            # compute first-order derivatives
-            ders_list = list()
-            print('act_dimension:', self.act_op.get_shape()[1])
-            print('idx:', idx)
-            time_start = time.time()
-            # for act_dim in range(self.act_op.get_shape()[1]):
-            #     # ders_list.append(self.sess.run(tf.gradients(probs[0, act_dim], self.var_lists),
-            #     #                                feed_dict={self.obs_tensor: obs[idx]}))
-            #     ders_list.append(self.sess.run(tf.gradients(tf.log(probs[0, act_dim]), self.var_lists),
-            #                                    feed_dict={self.obs_tensor: obs[idx]}))
-            # ders_list = [self.sess.run(tf.gradients(probs[0, act_dim], self.var_lists),
-            #                       feed_dict={self.obs_tensor: obs[idx]}) for act_dim in range(self.act_op.get_shape()[1])]
-
-            act_dim = np.random.randint(0,7)
-            ders_list.append(self.sess.run(tf.gradients(tf.log(probs[0, act_dim]), self.var_lists),
-                                          feed_dict={self.obs_tensor: obs[idx]}))
-
-            time_end = time.time()
-            print('compute %d..., time is %f ms' % (i, (time_end - time_start)))
-            for v in range(len(self.F_mat)):
-                for num_act in range(len(ders_list)):
-                    self.F_mat[v] += np.square(ders_list[num_act][v])
-
-            # prepare for plot
-            F_diff = 0
-
-            if i > 0:
-                for v in range(len(self.F_mat)):
-                    F_diff += np.sum(np.absolute(self.F_mat[v]/(i+1) - F_prev[v]))
-                mean_diff = np.mean(F_diff)
-                mean_diffs = np.append(mean_diffs, mean_diff)
-                ax_len = np.append(ax_len, i)
-                for v in range(len(self.F_mat)):
-                    F_prev[v] = self.F_mat[v] / (i+1)
-
-        import matplotlib.pyplot as plt
-        plt.plot(ax_len, mean_diffs)
-        plt.show()
-        plt.clf()
-        for v in range(len(self.F_mat)):
-            self.F_mat[v] /= num_samples
-        self.fisher_info.append(self.F_mat)
+    # def compute_fisher_info(self, obs, obs_idx):
+    #     """
+    #     compute fisher information
+    #     sess:
+    #     obs: the observation
+    #     obs_idx: the shuffle idx
+    #     """
+    #     #
+    #     #wait to add
+    #
+    #     num_samples = 500
+    #     # initialize Fisher information for most recent task
+    #     self.F_mat = []
+    #     for v in range(len(self.var_lists)):
+    #         self.F_mat.append(np.zeros(self.var_lists[v].get_shape().as_list()))
+    #
+    #     F_prev = copy.deepcopy(self.F_mat)
+    #     mean_diffs = np.zeros(0)
+    #     ax_len = np.zeros(0)
+    #
+    #     # calculate the probability
+    #     # probs = tf.nn.softmax(self.act_op) # the output of NN
+    #     probs = self.act_op
+    #
+    #     # calculate the fisher information with samples
+    #     import time
+    #     for i in range(num_samples):
+    #
+    #         idx = obs_idx[i:i+1]
+    #         # compute first-order derivatives
+    #         ders_list = list()
+    #         print('act_dimension:', self.act_op.get_shape()[1])
+    #         print('idx:', idx)
+    #         time_start = time.time()
+    #         # for act_dim in range(self.act_op.get_shape()[1]):
+    #         #     # ders_list.append(self.sess.run(tf.gradients(probs[0, act_dim], self.var_lists),
+    #         #     #                                feed_dict={self.obs_tensor: obs[idx]}))
+    #         #     ders_list.append(self.sess.run(tf.gradients(tf.log(probs[0, act_dim]), self.var_lists),
+    #         #                                    feed_dict={self.obs_tensor: obs[idx]}))
+    #         # ders_list = [self.sess.run(tf.gradients(probs[0, act_dim], self.var_lists),
+    #         #                       feed_dict={self.obs_tensor: obs[idx]}) for act_dim in range(self.act_op.get_shape()[1])]
+    #
+    #         act_dim = np.random.randint(0,7)
+    #         ders_list.append(self.sess.run(tf.gradients(tf.log(probs[0, act_dim]), self.var_lists),
+    #                                       feed_dict={self.obs_tensor: obs[idx]}))
+    #
+    #         time_end = time.time()
+    #         print('compute %d..., time is %f ms' % (i, (time_end - time_start)))
+    #         for v in range(len(self.F_mat)):
+    #             for num_act in range(len(ders_list)):
+    #                 self.F_mat[v] += np.square(ders_list[num_act][v])
+    #
+    #         # prepare for plot
+    #         F_diff = 0
+    #
+    #         if i > 0:
+    #             for v in range(len(self.F_mat)):
+    #                 F_diff += np.sum(np.absolute(self.F_mat[v]/(i+1) - F_prev[v]))
+    #             mean_diff = np.mean(F_diff)
+    #             mean_diffs = np.append(mean_diffs, mean_diff)
+    #             ax_len = np.append(ax_len, i)
+    #             for v in range(len(self.F_mat)):
+    #                 F_prev[v] = self.F_mat[v] / (i+1)
+    #
+    #     import matplotlib.pyplot as plt
+    #     plt.plot(ax_len, mean_diffs)
+    #     plt.show()
+    #     plt.clf()
+    #     for v in range(len(self.F_mat)):
+    #         self.F_mat[v] /= num_samples
+    #     self.fisher_info.append(self.F_mat)
 
     def compute_traj_fisher(self):
         """ compute a trajectory fisher information"""
 
         """ load trajectory data"""
-        traj_obs = np.load('./position/good_trajectory_obs_%d.npy' % self.num_task)
+        print('num_task:', self.num_task)
+        traj_obs = np.load(self.path_name + 'good_trajectory_obs_%d.npy' % self.num_task)
+        traj_K = np.load(self.path_name + 'good_trajectory_K_%d.npy' % self.num_task)
+        traj_k = np.load(self.path_name + '/good_trajectory_k_%d.npy' % self.num_task)
+        traj_covar = np.load(self.path_name + '/good_trajectory_covar_%d.npy' % self.num_task)
+
+        traj_obs = np.float32(traj_obs)
+        traj_K = np.float32(traj_K)
+        traj_k = np.float32(traj_k)
+        traj_covar = np.float32(traj_covar)
+
         self.num_task = self.num_task +1
 
 
@@ -178,7 +191,7 @@ class PolicyOptTf(PolicyOpt):
         mean_diffs = np.zeros(0)
         ax_len = np.zeros(0)
 
-        # calculate the probability
+        """calculate the probability"""
         # probs = tf.nn.softmax(self.act_op) # the output of NN
 
         act_abs = tf.abs(self.act_op)
@@ -189,7 +202,7 @@ class PolicyOptTf(PolicyOpt):
         save_ders = []
         save_action = np.zeros(0)
         save_prob = np.zeros(0)
-        num_temp = self.act_op.get_shape()[1]
+        # num_temp = self.act_op.get_shape()[1]
         save_fisher = [copy.deepcopy(self.F_mat)] * self.act_op.get_shape()[1]
 
         # calculate the fisher information with samples
@@ -203,17 +216,38 @@ class PolicyOptTf(PolicyOpt):
             print('act_dimension:', self.act_op.get_shape()[1])
             print('idx:', idx)
             time_start = time.time()
+
+            """ construct normal distribution"""
+            # K = traj_K[i]
+            # k = traj_k[i]
+            # mu = np.dot(K, traj_obs[i]) + k
+            # covar = np.diag(traj_covar[i])
+
+            # normal_gaussian = ds.Normal(
+            #     loc=mu,
+            #     scale=covar
+            # )
+            # probs = normal_gaussian.prob(self.act_op)
+
+
             for act_dim in range(self.act_op.get_shape()[1]):
                 # ders_list.append(self.sess.run(tf.gradients(tf.log(probs[0, act_dim]), self.var_lists),
                 #                                feed_dict={self.obs_tensor: traj_obs[idx]}))
-                probs_alter = None
-                if act_dim == 0:
-                    probs_alter = tf.multiply(tf.log(probs[0, act_dim]), tf.constant(1.0))
-                else:
-                    probs_alter = tf.log(probs[0, act_dim])
+                # probs_alter = None
+                # if act_dim == 0:
+                #     probs_alter = tf.multiply(tf.log(probs[0, act_dim]), tf.constant(1.0))
+                # else:
+                #     probs_alter = tf.log(probs[0, act_dim])
 
-                ders_list.append(self.sess.run(tf.gradients(probs_alter, self.var_lists),
-                                               feed_dict={self.obs_tensor: traj_obs[idx]}))
+                probs_alter = tf.log(probs[0, act_dim])
+
+                # probs = normal_gaussian.prob(self.act_op[0][act_dim])
+                # probs_alter = tf.log(probs)
+
+
+                probs_gradient = self.sess.run(tf.gradients(probs_alter, self.var_lists),
+                                               feed_dict={self.obs_tensor: traj_obs[idx]})
+                ders_list.append(probs_gradient)
 
             save_ders.append(ders_list)
             # ders_list = [self.sess.run(tf.gradients(probs[0, act_dim], self.var_lists),
@@ -236,7 +270,7 @@ class PolicyOptTf(PolicyOpt):
             for v in range(len(self.F_mat)):
                 for num_act in range(len(ders_list)):
                     save_fisher[num_act][v] += np.square(ders_list[num_act][v] / len(ders_list))
-                    self.F_mat[v] += np.square(ders_list[num_act][v]) / len(ders_list) * 1E3
+                    self.F_mat[v] += np.square(ders_list[num_act][v]) / len(ders_list)
 
             """ compute sum of gradient and then square"""
             # for v in range(len(self.F_mat)):
@@ -266,15 +300,14 @@ class PolicyOptTf(PolicyOpt):
             import cPickle as pickle
         except:
             import pickle
-        data_dir = '/home/sun/work/ocfgps/position/'
-        pickle.dump(save_ders, open(data_dir + 'gradient.pkl', 'wb'))
-        pickle.dump(save_action, open(data_dir + 'action.pkl', 'wb'))
-        pickle.dump(save_prob, open(data_dir + 'prob.pkl', 'wb'))
+        pickle.dump(save_ders, open(self.path_name + 'gradient.pkl', 'wb'))
+        pickle.dump(save_action, open(self.path_name + 'action.pkl', 'wb'))
+        pickle.dump(save_prob, open(self.path_name + 'prob.pkl', 'wb'))
 
         for v in range(len(self.F_mat)):
             self.F_mat[v] /= num_samples
         self.fisher_info.append(self.F_mat)
-        pickle.dump(save_fisher, open(data_dir + 'fisher.pkl', 'wb'))
+        pickle.dump(save_fisher, open(self.path_name + 'fisher.pkl', 'wb'))
 
     def keep_pre_vars(self):
         self.var_lists_pre = []
@@ -424,6 +457,10 @@ class PolicyOptTf(PolicyOpt):
         self.var = 1 / np.diag(A)
         self.policy.chol_pol_covar = np.diag(np.sqrt(self.var))
 
+
+        """ save the variable"""
+        self.save_variable()
+
         return self.policy
 
     def start(self):
@@ -431,9 +468,19 @@ class PolicyOptTf(PolicyOpt):
         for v in range(len(self.var_lists)):
             self.star_var.append(self.sess.run(self.var_lists[v]))
     def restore(self):
-        if hasattr(self, "star_vars"):
-            for v in range(len(self.var_lists)):
-                self.sess.run(self.var_lists[v].assign(self.star_var[v]))
+        """
+        restore the previous weight from the ckpt file
+        """
+        self.sess.run(tf.global_variables_initializer())
+        print('before restore:', self.sess.run(self.var_lists[5]))
+        self.var_saver.restore(self.sess, self.path_name + 'var_list.ckpt')
+        print('after restore:', self.sess.run(self.var_lists[5]))
+
+    def save_variable(self):
+        """
+        save weights to file
+        """
+        self.var_saver.save(self.sess, self.path_name + 'var_list.ckpt')
 
 
     def update_ewc(self, obs, tgt_mu, tgt_prc, tgt_wt,
@@ -455,7 +502,6 @@ class PolicyOptTf(PolicyOpt):
             self.solver.update_loss(self.fisher_info, self.var_lists, self.star_var, 15)
             # self.solver.solver_op = self.solver.get_solver_op(loss=self.solver.ewc_loss)
             self.solver.solver_op = self.solver.reset_solver_op(loss=self.solver.ewc_loss, var_lists=self.var_lists)
-            self.sess.run(tf.global_variables_initializer())
             self.restore()
         else:
             self.solver.update_loss()
@@ -572,6 +618,9 @@ class PolicyOptTf(PolicyOpt):
                 self.compute_traj_fisher()
             else:
                 self.compute_fisher_info(obs, idx)
+
+        """ save varibles """
+        self.save_variable()
 
         return self.policy
 
