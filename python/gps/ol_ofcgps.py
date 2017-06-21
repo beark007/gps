@@ -96,6 +96,7 @@ class GPSMain(object):
 
         # position_train = self.data_logger.unpickle('./position/all_train_position.pkl')
         position_train = self.data_logger.unpickle('./position/position_train.pkl')
+        print position_train
         # test_position = self.data_logger.unpickle('./position/all_test_position.pkl')
         all_position_train = np.zeros(position_train.shape)
 

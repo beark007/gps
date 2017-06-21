@@ -16,13 +16,15 @@ from gps.algorithm.cost.cost_utils import RAMP_FINAL_ONLY
 from gps.algorithm.dynamics.dynamics_lr_prior import DynamicsLRPrior
 from gps.algorithm.dynamics.dynamics_prior_gmm import DynamicsPriorGMM
 from gps.algorithm.traj_opt.traj_opt_lqr_python import TrajOptLQRPython
-from gps.algorithm.policy_opt.policy_opt_caffe import PolicyOptCaffe
+# from gps.algorithm.policy_opt.policy_opt_caffe import PolicyOptCaffe
+from gps.algorithm.policy_opt.policy_opt_tf import PolicyOptTf
 from gps.algorithm.policy.lin_gauss_init import init_lqr
 from gps.algorithm.policy.policy_prior_gmm import PolicyPriorGMM
 from gps.algorithm.policy.policy_prior import PolicyPrior
 from gps.proto.gps_pb2 import JOINT_ANGLES, JOINT_VELOCITIES, \
         END_EFFECTOR_POINTS, END_EFFECTOR_POINT_VELOCITIES, ACTION
 from gps.gui.config import generate_experiment_info
+from gps.algorithm.policy_opt.tf_model_example import tf_network
 
 
 SENSOR_DIMS = {
@@ -45,7 +47,7 @@ common = {
     'data_files_dir': EXP_DIR + 'data_files/',
     'target_filename': EXP_DIR + 'target.npz',
     'log_filename': EXP_DIR + 'log.txt',
-    'conditions': 4,
+    'conditions': 1,
 }
 
 if not os.path.exists(common['data_files_dir']):
@@ -60,8 +62,9 @@ agent = {
     'substeps': 5,
     'conditions': common['conditions'],
     'pos_body_idx': np.array([1]),
-    'pos_body_offset': [[np.array([-0.08, -0.08, 0])], [np.array([-0.08, 0.08, 0])],
-                        [np.array([0.08, 0.08, 0])], [np.array([0.08, -0.08, 0])]],
+    #'pos_body_offset': [[np.array([-0.08, -0.08, 0])], [np.array([-0.08, 0.08, 0])],
+    #                   [np.array([0.08, 0.08, 0])], [np.array([0.08, -0.08, 0])]],
+    'pos_body_offset': [[np.array([-0.10, -0.05, 0])]],
     'T': 100,
     'sensor_dims': SENSOR_DIMS,
     'state_include': [JOINT_ANGLES, JOINT_VELOCITIES, END_EFFECTOR_POINTS,
@@ -140,10 +143,21 @@ algorithm['traj_opt'] = {
     'type': TrajOptLQRPython,
 }
 
+#algorithm['policy_opt'] = {
+#    'type': PolicyOptCaffe,
+#    'iterations': 4000,
+#    'weights_file_prefix': EXP_DIR + 'policy',
+#}
 algorithm['policy_opt'] = {
-    'type': PolicyOptCaffe,
-    'iterations': 4000,
-    'weights_file_prefix': EXP_DIR + 'policy',
+        'type': PolicyOptTf,
+        'network_params':{
+            'obs_include':[JOINT_ANGLES, JOINT_VELOCITIES, END_EFFECTOR_POINTS, END_EFFECTOR_POINT_VELOCITIES],
+            'obs_vector_data':[JOINT_ANGLES, JOINT_VELOCITIES, END_EFFECTOR_POINTS, END_EFFECTOR_POINT_VELOCITIES],
+            'sensor_dims':SENSOR_DIMS,
+            },
+        'network_model':tf_network,
+        'iterations': 6000,
+        'weights_file_prefix': EXP_DIR + 'policy',
 }
 
 algorithm['policy_prior'] = {
@@ -154,7 +168,7 @@ algorithm['policy_prior'] = {
 }
 
 config = {
-    'gui_on': True,
+    'gui_on': False,
     'iterations': algorithm['iterations'],
     'num_samples': 5,
     'verbose_trials': 1,

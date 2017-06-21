@@ -46,16 +46,19 @@ def plot_weight(ax, weights):
 data_logger = DataLogger()
 
 
-def gradient_visualization(fisher_info):
-    """ process fisher information"""
+def gradient_visualization(gradient_info):
+    """ process gradient which is absolute value
+    has the shape of 3-D [num_samples * num_sample * num_weights]
+    """
     # mean of parameters to the first sample's list
-    for num_sum in range(1, len(fisher_info)):
-         for num_act in range(len(fisher_info[0])):
-            for num_weight in range(len(fisher_info[0][0])):
-                fisher_info[0][num_act][num_weight] += fisher_info[num_sum][num_act][num_weight]
+    for num_sum in range(1, len(gradient_info)):
+         for num_act in range(len(gradient_info[0])):
+            for num_weight in range(len(gradient_info[0][0])):
+                gradient_info[0][num_act][num_weight] = np.abs(gradient_info[0][num_act][num_weight])
+                gradient_info[0][num_act][num_weight] += np.abs(gradient_info[num_sum][num_act][num_weight])
 
     # copy the data
-    sum_fisher = copy.deepcopy(fisher_info[0])
+    sum_fisher = copy.deepcopy(gradient_info[0])
 
     """
     squeeze, and merge to [w1, b1, w2, b2, ... ]
@@ -301,6 +304,12 @@ def cal_prob_nn():
     """ construct normal distribution """
     time_step = traj_K.shape[0]
 
-compare_act_nn_traj()
+def gradient_plot():
+    """ plot gradient using gradient_visualizing
+    """
+    gradient_data = data_logger.unpickle('./position/gradient.pkl')
+    gradient_visualization(gradient_data)
+
+
 
 

@@ -1,7 +1,7 @@
 """ This file defines the main object that runs experiments. """
 """
-using the saved data to train NN,
-but failed
+policy learn in three area and test in six area
+OLGPS paper experiment 1
 """
 
 import matplotlib as mpl
@@ -66,86 +66,235 @@ class GPSMain(object):
         Returns: None
         """
         self.target_points = self.agent._hyperparams['target_ee_points'][:3]
+        itr_start = self._initialize(itr_load)
 
-        """ load trajectories data"""
-        # total_mu = self.data_logger.unpickle('./position/total_mu.pkl')
-        # total_obs = self.data_logger.unpickle('./position/total_obs.pkl')
-        # total_prc = self.data_logger.unpickle('./position/total_prc.pkl')
-        # total_wt = self.data_logger.unpickle('./position/total_wt.pkl')
+        # """ set pre"""
+        # position_train = self.data_logger.unpickle('./position/position_train.pkl')
 
-        # train_mu = self.data_logger.unpickle('./position/mu_0.pkl')
-        # train_obs_data = self.data_logger.unpickle('./position/obs_0.pkl')
-        # train_prc = self.data_logger.unpickle('./position/prc_0.pkl')
-        # train_wt = self.data_logger.unpickle('./position/wt_0.pkl')
 
-        """ load test position"""
-        # test_position = self.data_logger.unpickle('./position/test_position.pkl')
-        # test_idxs = [1, 2]
-        # test_position = np.zeros(0)
-        # for test_idx in test_idxs:
-        #     test_data = self.data_logger.unpickle('./position/test_position_%d.pkl' % test_idx)
-        #     if len(test_position.shape) != 2:
-        #         test_position = test_data
+
+        # print('training position.....')
+        # print(position_train)
+
+        # print('test all testing position....')
+        # for i in xrange(position_train.shape[0]):
+        #     test_positions = self.generate_position_radius(position_train[i], 0.03, 5, 0.01)
+        #     if i == 0:
+        #         all_test_positions = test_positions
         #     else:
-        #         test_position = np.concatenate((test_position, test_data), axis=0)
+        #         all_test_positions = np.concatenate((all_test_positions, test_positions))
 
-        count_compute = 0
-        for num_pos in range(4):
-            """ load data"""
-            train_mu = self.data_logger.unpickle('./position/mu_%d.pkl' % num_pos)
-            train_obs_data = self.data_logger.unpickle('./position/obs_%d.pkl' % num_pos)
-            train_prc = self.data_logger.unpickle('./position/prc_%d.pkl' % num_pos)
-            train_wt = self.data_logger.unpickle('./position/wt_%d.pkl' % num_pos)
+        T = self.algorithm.T
+        N = self._hyperparams['num_samples']
+        dU = self.algorithm.dU
+
+        flag_fail = True
+        flag_suc_peg = False
+        num_suc = 4
+        num_good_save = 6
+        error_acc = 0.02
 
 
-            """ train NN"""
-            # self.algorithm.policy_opt.update(train_obs_data, train_mu, train_prc, train_wt)
+        # position_train = self.data_logger.unpickle('./position/all_train_position.pkl')
+        position_train = self.data_logger.unpickle('./position/position_train.pkl')
+        # test_position = self.data_logger.unpickle('./position/all_test_position.pkl')
+        all_position_train = np.zeros(position_train.shape)
 
-            if count_compute == 0:
-                self.algorithm.policy_opt.update_ewc(train_obs_data, train_mu, train_prc, train_wt,
-                                                     with_ewc=False, compute_fisher=False, with_traj=True)
-            elif count_compute == 1:
-                self.algorithm.policy_opt.update_ewc(train_obs_data, train_mu, train_prc, train_wt,
-                                                     with_ewc=True, compute_fisher=False, with_traj=True)
-            else:
-                self.algorithm.policy_opt.update_ewc(train_obs_data, train_mu, train_prc, train_wt,
-                                                     with_ewc=True, compute_fisher=False, with_traj=True)
+        for num_pos in range(position_train.shape[0]):
+        # for num_pos in range(2):
 
-            """ test current policy"""
-            # self.test_current_policy()
+            """ alter the iteration when it far away target hole"""
+            if num_pos >= 2:
+                num_suc = 6
+            """ load train position and reset agent model. """
+            flag_fail = True
+            while(flag_fail):
 
-            """ test NN in different positions"""
-            test_position = None
-            for test_idx in range(num_pos+1):
-                if test_idx == 0:
-                    test_position = self.data_logger.unpickle('./position/test_position_%d.pkl' % (test_idx))
+                """ test OLGPS only"""
+                position_temp = position_train[num_pos]
+                disturbe = np.random.uniform(-0.005, 0.005, 1)
+                position_temp[0] = position_temp[0] + disturbe
+                position_temp[1] = position_temp[1] - disturbe
+
+
+                for cond in self._train_idx:
+                    # self._hyperparams['agent']['pos_body_offset'][cond] = position_train[num_pos]
+                    self._hyperparams['agent']['pos_body_offset'][cond] = position_temp
+                self.agent.reset_model(self._hyperparams)
+
+                """ test OLGPS generalization"""
+                # for cond in self._train_idx:
+                #     self._hyperparams['agent']['pos_body_offset'][cond] = position_train[num_pos]
+                #     # self._hyperparams['agent']['pos_body_offset'][cond] = position_temp
+                # self.agent.reset_model(self._hyperparams)
+
+                # initial train array
+                train_prc = np.zeros((0, T, dU, dU))
+                train_mu = np.zeros((0, T, dU))
+                train_obs_data = np.zeros((0, T, self.algorithm.dO))
+                train_wt = np.zeros((0, T))
+
+                # initial variables
+                count_suc = 0
+
+                for itr in range(itr_start, self._hyperparams['iterations']):
+                    print('******************num_pos:************', num_pos)
+                    print('______________________itr:____________', itr)
+                    print('>>>>>>>>>>>>>count_suc:>>>>>>>>>>>>>>>', count_suc)
+                    for cond in self._train_idx:
+                        for i in range(self._hyperparams['num_samples']):
+                            if num_pos == 0:
+                                self._take_sample(itr, cond, i)
+                            elif itr == 0:
+                                self._take_sample(itr, cond, i)
+                            else:
+                                # self._take_train_sample(itr, cond, i)
+                                self._take_sample(itr, cond, i)
+
+                    traj_sample_lists = [
+                        self.agent.get_samples(cond, -self._hyperparams['num_samples'])
+                        for cond in self._train_idx
+                    ]
+
+                    # calculate the distance of  the end-effector to target position
+                    ee_pos = self.agent.get_ee_pos(cond)[:3]
+                    target_pos = self.agent._hyperparams['target_ee_pos'][:3]
+                    distance_pos = ee_pos - target_pos
+                    distance_ee = np.sqrt(distance_pos.dot(distance_pos))
+                    print('distance ee:', distance_ee)
+
+                    # collect the successful sample to train global policy
+                    if distance_ee <= error_acc:
+                        count_suc += 1
+                        if count_suc > num_suc:
+                            flag_suc_peg = True
+                            tgt_mu, tgt_prc, obs_data, tgt_wt = self.train_prepare(traj_sample_lists)
+                            train_mu = np.concatenate((train_mu, tgt_mu))
+                            train_prc = np.concatenate((train_prc, tgt_prc))
+                            train_obs_data = np.concatenate((train_obs_data, obs_data))
+                            train_wt = np.concatenate((train_wt, tgt_wt))
+                        if count_suc > num_suc + num_good_save:
+                            """ save the last good trajectory"""
+                            save_mu = tgt_mu[0, :, :]
+                            save_prc = tgt_prc[0, :, :, :]
+                            save_obs = obs_data[0, :, :]
+                            save_wt = tgt_wt[0, :]
+                            save_K = self.algorithm.cur[0].traj_distr.K
+                            save_k = self.algorithm.cur[0].traj_distr.k
+                            save_covar = self.algorithm.cur[0].traj_distr.chol_pol_covar
+                            np.save('./position/good_trajectory_mu_%d.npy' % num_pos, save_mu)
+                            np.save('./position/good_trajectory_prc_%d.npy' % num_pos, save_prc)
+                            np.save('./position/good_trajectory_obs_%d.npy' % num_pos, save_obs)
+                            np.save('./position/good_trajectory_wt_%d.npy' % num_pos, save_wt)
+                            np.save('./position/good_trajectory_K_%d.npy' % num_pos, save_K)
+                            np.save('./position/good_trajectory_k_%d.npy' % num_pos, save_k)
+                            np.save('./position/good_trajectory_covar_%d.npy' % num_pos, save_covar)
+                            self.data_logger.pickle('./position/good_trajectory_mu_%d.pkl' % num_pos, save_mu)
+                            self.data_logger.pickle('./position/good_trajectory_prc_%d.pkl' % num_pos, save_prc)
+                            self.data_logger.pickle('./position/good_trajectory_obs_%d.pkl' % num_pos, save_obs)
+                            self.data_logger.pickle('./position/good_trajectory_wt_%d.pkl' % num_pos, save_wt)
+
+                        # """ save the successful insertion trajectory """
+                        # np.save('./position/step_mu_%d.npy' % count_suc, tgt_mu)
+
+
+
+                    # Clear agent samples.
+                    self.agent.clear_samples()
+
+                    # if get enough sample, then break
+                    if count_suc > num_suc + num_good_save:
+                        break
+                    if not flag_suc_peg:
+                        self._take_iteration(itr, traj_sample_lists)
+                    if self.algorithm.traj_opt.flag_reset:
+                        break
+                    # pol_sample_lists = self._take_policy_samples()
+                    # self._log_data(itr, traj_sample_lists, pol_sample_lists)
+                    # if num_pos > 0:
+                    #     self.algorithm.fit_global_linear_policy(traj_sample_lists)
+
+                if not self.algorithm.traj_opt.flag_reset and flag_suc_peg:
+                    flag_suc_peg = False
+                    # save train position
+                    all_position_train[num_pos] = position_temp
+
+                    flag_fail = False
+
+
+                    self.data_logger.pickle('./position/mu_%d.pkl' % num_pos, train_mu)
+                    self.data_logger.pickle('./position/prc_%d.pkl' % num_pos, train_prc)
+                    self.data_logger.pickle('./position/obs_%d.pkl' % num_pos, train_obs_data)
+                    self.data_logger.pickle('./position/wt_%d.pkl' % num_pos, train_wt)
+
+                    if num_pos == 0:
+                        self.algorithm.policy_opt.update_ewc(train_obs_data, train_mu, train_prc, train_wt,
+                                                             with_ewc=False, compute_fisher=False)
+                    else:
+                        if num_pos == 2:
+                            self.algorithm.policy_opt.update_ewc(train_obs_data, train_mu, train_prc, train_wt,
+                                                                 with_ewc=False, compute_fisher=False)
+                        else:
+                            self.algorithm.policy_opt.update_ewc(train_obs_data, train_mu, train_prc, train_wt,
+                                                                 with_ewc=False, compute_fisher=False)
+                    # test the trained in the current position
+                    print('test current policy.....')
+                    if num_pos == 2:
+                        print('123')
+                    self.test_current_policy()
+
+                    """ test OLGPS only"""
+                    # test_position = self.data_logger.unpickle('./position/test_position.pkl')
+                    test_position = None
+                    if num_pos == 0:
+                        test_position = self.data_logger.unpickle('./position/test_position_%d.pkl' % (num_pos))
+                    else:
+                        test_position1 = self.data_logger.unpickle('./position/test_position_%d.pkl' % (num_pos - 1))
+                        test_position2 = self.data_logger.unpickle('./position/test_position_%d.pkl' % (num_pos ))
+                        test_position = np.concatenate((test_position1, test_position2), axis=0)
+
+                    cost, pos_suc_count, ee_distance = self.test_cost(test_position)
+                    # self.data_logger.pickle('./position/all_distance_%d.pkl' % num_pos, ee_distance)
+                    # self.data_logger.pickle('./position/all_cost_%d.pkl' % num_pos, cost)
+                    # self.data_logger.pickle('./position/all_suc_count_%d.pkl' % num_pos, pos_suc_count)
+                    #
+                    # self.data_logger.pickle('./position/all_train_position.pkl', all_position_train)
+                    # self.data_logger.pickle('./position/all_test_position.pkl', test_position)
+
+                    # if ns
+
+
                 else:
-                    test_pos = self.data_logger.unpickle('./position/test_position_%d.pkl' % (test_idx ))
-                    test_position = np.concatenate((test_position, test_pos), axis=0)
+                    print("a o!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                    # raw_input()
 
-            cost, pos_suc_count, ee_distance = self.test_cost(test_position)
+                self.algorithm.reset_alg()
+                self.next_iteration_prepare()
 
-            """ we move the compute fisher info here"""
-            if count_compute == 0:
-                self.algorithm.policy_opt.compute_traj_fisher()
-            elif count_compute == 1:
-                self.algorithm.policy_opt.compute_traj_fisher()
-            elif count_compute == 2:
-                self.algorithm.policy_opt.compute_traj_fisher()
+            # reset the algorithm to the initial algorithm for the next position
+            # del self.algorithm
+            # config['algorithm']['agent'] = self.agent
+            # self.algorithm = config['algorithm']['type'](config['algorithm'])
+            # self.algorithm.reset_alg()
+            # self.next_iteration_prepare()
 
-            self.data_logger.pickle('./position/all_distance_%d.pkl' % num_pos, ee_distance)
-            self.data_logger.pickle('./position/all_cost_%d.pkl' % num_pos, cost)
-            self.data_logger.pickle('./position/all_suc_count_%d.pkl' % num_pos, pos_suc_count)
 
-            """ save the current opt action"""
-            # load traj obs
-            traj_obs = np.load('./position/good_trajectory_obs_%d.npy' % num_pos)
-            traj_obs = np.expand_dims(traj_obs, axis=0)
-            traj_action, _, _, _ = self.algorithm.policy_opt.prob(traj_obs)
-            traj_action = traj_action[0, :, :]
-            np.save('./position/nn_trajectory_action_%d.npy' % num_pos, traj_action)
 
-            count_compute += 1
+        print("finish......")
+        """ test OLGPS only"""
+        # ee_distance1 = np.reshape(ee_distance1, (6, ee_distance1.shape[0] / 6))
+        # ee_distance2 = np.reshape(ee_distance2, (6, ee_distance2.shape[0] / 6))
+        # ee_distance3 = np.reshape(ee_distance3, (6, ee_distance3.shape[0] / 6))
+        # self.data_logger.pickle('all_distance_3.pkl', ee_distance3)
+        # self.data_logger.pickle('./position/all_distance_3.pkl', ee_distance3)
+        # self.data_logger.pickle('./position/all_distance_2.pkl', ee_distance2)
+        # self.data_logger.pickle('./position/all_distance_1.pkl', ee_distance1)
+        # self.data_logger.pickle('./position/all_cost_3.pkl', cost3)
+        # self.data_logger.pickle('./position/all_cost_2.pkl', cost2)
+        # self.data_logger.pickle('./position/all_cost_1.pkl', cost1)
+        # self.data_logger.pickle('./position/all_suc_3.pkl', pos_suc_count3)
+        # self.data_logger.pickle('./position/all_suc_2.pkl', pos_suc_count2)
+        # self.data_logger.pickle('./position/all_suc_1.pkl', pos_suc_count1)
 
         self._end()
 
@@ -304,6 +453,7 @@ class GPSMain(object):
         # return np.mean(total_costs), total_suc, total_distance
         return total_costs, total_suc, total_distance
 
+
     def test_old_cost(self, position):
         """
         test the NN policy at all position
@@ -354,11 +504,11 @@ class GPSMain(object):
 
         """
         if val is None:
-            self.alpha1 = 0.8
-            self.alpha2 = 0.2
+            self.alpha1 = 1
+            self.alpha2 = 0
         else:
-            self.alpha1 = 0.8
-            self.alpha2 = 0.2
+            self.alpha1 = 1
+            self.alpha2 = 0
     def pol_alpha(self):
         return self.alpha1, self.alpha2
 
@@ -614,6 +764,47 @@ class GPSMain(object):
                 self.algorithm.policy_opt.policy, self._test_idx[cond],
                 verbose=verbose, save=False, noisy=False)
             policy_cost = self.algorithm.cost[0].eval(pol_samples[cond][0])[0]
+            policy_cost = np.sum(policy_cost)
+            print "cost: %d" % policy_cost  # wait to plot in gui in gps_training_gui.py
+            costs.append(policy_cost)
+
+            ee_points = self.agent.get_ee_point(cond)
+
+        return [SampleList(samples) for samples in pol_samples], costs, ee_points
+
+    def take_new_nn_samples(self, N=None):
+        """
+        take the NN policy
+        Args:
+            N:
+
+        Returns:
+            samples, costs, ee_points
+
+        """
+        """
+            Take samples from the policy to see how it's doing.
+            Args:
+                N  : number of policy samples to take per condition
+            Returns: None
+        """
+
+        if 'verbose_policy_trials' not in self._hyperparams:
+            # AlgorithmTrajOpt
+            return None
+        verbose = self._hyperparams['verbose_policy_trials']
+        if self.gui:
+            self.gui.set_status_text('Taking policy samples.')
+        pol_samples = [[None] for _ in range(len(self._test_idx))]
+        # Since this isn't noisy, just take one sample.
+        # TODO: Make this noisy? Add hyperparam?
+        # TODO: Take at all conditions for GUI?
+        costs = list()
+        for cond in range(len(self._test_idx)):
+            pol_samples[cond][0] = self.agent.sample(
+                self.mimic_algorithm.policy_opt.policy, self._test_idx[cond],
+                verbose=verbose, save=False, noisy=False)
+            policy_cost = self.mimic_algorithm.cost[0].eval(pol_samples[cond][0])[0]
             policy_cost = np.sum(policy_cost)
             print "cost: %d" % policy_cost  # wait to plot in gui in gps_training_gui.py
             costs.append(policy_cost)
