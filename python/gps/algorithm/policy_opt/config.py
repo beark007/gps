@@ -14,7 +14,7 @@ GENERIC_CONFIG = {
     # Solver hyperparameters.
     'iterations': 5000,  # Number of iterations per inner iteration.
     'batch_size': 25,
-    'lr': 0.005,  # Base learning rate (by default it's fixed).
+    'lr': 0.001,  # Base learning rate (by default it's fixed).
     'lr_policy': 'fixed',  # Learning rate policy.
     'momentum': 0.9,  # Momentum.
     'weight_decay': 0.005,  # Weight decay.

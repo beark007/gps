@@ -310,6 +310,45 @@ def gradient_plot():
     gradient_data = data_logger.unpickle('./position/gradient.pkl')
     gradient_visualization(gradient_data)
 
+def diff_fisher_plot():
+    """
+    plot different fisher of l2, l1, non
+    """
+    """ load data """
+    fisher_data = []
+    fisher_data.append(data_logger.unpickle('./position/fisher/fisher_none.pkl'))
+    fisher_data.append(data_logger.unpickle('./position/fisher/fisher_l1.pkl'))
+    fisher_data.append(data_logger.unpickle('./position/fisher/fisher_l2.pkl'))
+
+    """ prepare data for plot"""
+    weights_data = []
+    for num_weight in range(len(fisher_data[0])):
+        weight_data = np.zeros(0)
+        for num_fisher in range(len(fisher_data)):
+            weight_temp = fisher_data[num_fisher][num_weight].flatten()
+            weight_temp = np.expand_dims(weight_temp, axis=0)
+            length = len(weight_data.shape)
+            if len(weight_data.shape) > 1:
+                weight_data = np.concatenate((weight_data, weight_temp), axis=0)
+            else:
+                weight_data = weight_temp
+        weights_data.append(weight_data)
+
+    for num_weight in range(len(weights_data)):
+        plt.figure(num_weight)
+        ax = plt.gca()
+        ax.set_xlabel('number')
+        ax.set_xlabel('value')
+        ax.set_title('fisher_weight_%d' % num_weight)
+        plot_weight(ax, weights_data[num_weight])
+
+    plt.show()
+
+
+diff_fisher_plot()
+
+
+
 
 
 

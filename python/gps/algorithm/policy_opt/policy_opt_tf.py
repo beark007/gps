@@ -17,6 +17,11 @@ from gps.algorithm.policy.tf_policy import TfPolicy
 from gps.algorithm.policy_opt.policy_opt import PolicyOpt
 from gps.algorithm.policy_opt.tf_utils import TfSolver
 
+try:
+    import cPickle as pickle
+except:
+    import pickle
+
 
 
 LOGGER = logging.getLogger(__name__)
@@ -47,11 +52,17 @@ class PolicyOptTf(PolicyOpt):
         self.solver = None
         self.feat_vals = None
 
+        self.decay_step = tf.Variable(0, trainable=False)
+        self.learning_rate = tf.train.exponential_decay(0.01, global_step=self.decay_step,
+                                                        decay_steps=1000,
+                                                        decay_rate=0.7)
+
         self.iteration = self._hyperparams['iterations']
 
         self.fisher_info = list()   # fisher information for each condition
         self.var_lists = None   # variables of NN
         self.var_lists_pre = [] # variables of previous NN
+        self.lam = np.zeros(0)
 
         self.path_name = '/home/work/work/gps_imporve/ocfgps/position/'
 
@@ -181,7 +192,7 @@ class PolicyOptTf(PolicyOpt):
         traj_k = np.float32(traj_k)
         traj_covar = np.float32(traj_covar)
 
-        self.num_task = self.num_task +1
+
 
 
         num_samples = traj_obs.shape[0]
@@ -281,9 +292,9 @@ class PolicyOptTf(PolicyOpt):
             """ compute using max value of each action"""
             if i > num_samples*0.5:
                 if i > num_samples*0.8:
-                    weight_fisher = 30
+                    weight_fisher = 6
                 else:
-                    weight_fisher = 10
+                    weight_fisher = 3
                 print('weight_fisher:', weight_fisher)
             for v in range(len(self.F_mat)):
                 max_fisher_value = np.full(self.F_mat[v].shape, -np.inf)
@@ -311,16 +322,13 @@ class PolicyOptTf(PolicyOpt):
                 for v in range(len(self.F_mat)):
                     F_prev[v] = self.F_mat[v] / (i+1)
 
-        import matplotlib.pyplot as plt
-        plt.plot(ax_len, mean_diffs)
+        # import matplotlib.pyplot as plt
+        # plt.plot(ax_len, mean_diffs)
         # plt.show()
-        plt.clf()
+        # plt.clf()
 
         """ save data"""
-        try:
-            import cPickle as pickle
-        except:
-            import pickle
+
         pickle.dump(save_ders, open(self.path_name + 'gradient.pkl', 'wb'))
         pickle.dump(save_action, open(self.path_name + 'action.pkl', 'wb'))
         pickle.dump(save_prob, open(self.path_name + 'prob.pkl', 'wb'))
@@ -329,9 +337,12 @@ class PolicyOptTf(PolicyOpt):
         for v in range(len(self.F_mat)):
             self.F_mat[v] /= num_samples
         self.fisher_info.append(self.F_mat)
-        pickle.dump(save_fisher, open(self.path_name + 'fisher_%d.pkl' % self.num_task, 'wb'))
+        pickle.dump(self.F_mat, open(self.path_name + 'fisher_%d.pkl' % self.num_task, 'wb'))
+        pickle.dump(self.fisher_info, open(self.path_name + 'fisher_info_%d.pkl' % self.num_task, 'wb'))
         """ save var list used to compare with fisher information"""
         pickle.dump(self.sess.run(self.var_lists), open(self.path_name + 'var_lists_%d.pkl' % self.num_task, 'wb'))
+
+        self.num_task = self.num_task +1
 
     def keep_pre_vars(self):
         self.var_lists_pre = []
@@ -497,6 +508,7 @@ class PolicyOptTf(PolicyOpt):
         for v in range(len(self.var_lists)):
             self.star_var.append(self.sess.run(self.var_lists[v]))
         self.var_lists_pre.append(self.star_var)
+        pickle.dump(self.var_lists_pre, open(self.path_name + 'var_lists_pre_%d.pkl' % (self.num_task-1), 'wb'))
 
     def restore(self, num_task=None):
         """
@@ -514,7 +526,7 @@ class PolicyOptTf(PolicyOpt):
         """
         save weights to file
         """
-        if num_task:
+        if num_task is not None:
             self.var_saver.save(self.sess, self.path_name + 'var_list_%d.ckpt' % num_task)
         else:
             self.var_saver.save(self.sess, self.path_name + 'var_list.ckpt')
@@ -522,8 +534,8 @@ class PolicyOptTf(PolicyOpt):
     def reset_iteration(self, itr):
         self.iteration = itr
 
-    def update_ewc(self, obs, tgt_mu, tgt_prc, tgt_wt,
-                   with_ewc=False, compute_fisher=False, with_traj=False, with_restore=False):
+    def update_ewc(self, obs, tgt_mu, tgt_prc, tgt_wt, lam,
+                   with_ewc=False, compute_fisher=False, with_traj=False):
         """
         Update policy with ewc loss
         Args:
@@ -534,26 +546,33 @@ class PolicyOptTf(PolicyOpt):
         Returns:
             A tensorflow object with updated weights.
         """
-        if with_restore:
-            self.restore(self.num_task)
         if with_ewc:
             self.save_variable()
             self.start()
+            ####### reset learning rate
+            self.reset_lr()
             ####### use all var_lists
-            self.solver.update_loss(self.fisher_info, self.var_lists, self.var_lists_pre, 20)
+            self.solver.update_loss(self.fisher_info, self.var_lists, self.var_lists_pre, lam)
             ####### use previous var_lists
             # self.solver.update_loss(self.fisher_info, self.var_lists, self.star_var, 20)
-            self.solver.solver_op = self.solver.reset_solver_op(loss=self.solver.ewc_loss, var_lists=self.var_lists)
+            self.solver.solver_op = self.solver.reset_solver_op(loss=self.solver.ewc_loss,
+                                                                var_lists=self.var_lists,
+                                                                learning_rate=self.learning_rate,
+                                                                global_step=self.decay_step)
             self.restore()
         else:
             self.save_variable()
+            self.reset_lr()
             self.solver.update_loss(var_lists=self.var_lists)
-            self.solver.solver_op = self.solver.reset_solver_op(loss=self.solver.ewc_loss, var_lists=self.var_lists)
+            self.solver.solver_op = self.solver.reset_solver_op(loss=self.solver.ewc_loss,
+                                                                var_lists=self.var_lists,
+                                                                learning_rate=self.learning_rate,
+                                                                global_step=self.decay_step)
             self.restore()
 
-        if self.num_task == 2:
-            print('num_task 1: ', self.var_lists_pre[0][5])
-            print('num_task 2: ', self.var_lists_pre[1][5])
+        # if self.num_task == 2:
+        #     print('num_task 1: ', self.var_lists_pre[0][5])
+        #     print('num_task 2: ', self.var_lists_pre[1][5])
 
         # self.solver.update_loss()
 
@@ -632,7 +651,11 @@ class PolicyOptTf(PolicyOpt):
 
         # for i in range(self._hyperparams['iterations']):
         # for i in range(self.iteration):
-        for i in range(20000):
+        for i in range(8000):
+
+            # if i < 4000:
+            #     self.step_add(self.decay_step)
+
             # Load in data for this batch.
             start_idx = int(i * self.batch_size %
                             (batches_per_epoch * self.batch_size))
@@ -645,7 +668,8 @@ class PolicyOptTf(PolicyOpt):
 
             """ add the fisher value"""
             loss = self.solver(feed_dict, self.sess, device_string=self.device_string)
-            loss_nature = self.sess.run(self.loss_scalar, feed_dict=feed_dict)
+            # loss_nature = self.sess.run(self.loss_scalar, feed_dict=feed_dict)
+            loss_nature = loss[1]
             train_loss = loss[0]
 
             average_loss += train_loss
@@ -655,25 +679,25 @@ class PolicyOptTf(PolicyOpt):
                 LOGGER.info('tensorflow iteration %d, average loss %f',
                             i + 1, average_loss / 50)
                 LOGGER.info('average nature loss: %f', average_loss_nature / 50)
-                if average_loss_nature < 5.5*50:
+                LOGGER.info('learning rate: %f', self.sess.run(self.learning_rate))
+                if average_loss_nature < 4*50:
                     break
-                if len(loss) == 5:
-                    """ print fisher value"""
-                    print('fisher value: ', loss[2])
+
+                if len(self.fisher_info) > 0:
                     fisher_value = tf.constant(0, dtype=tf.float32)
                     for num_task in range(len(self.fisher_info)):
                         for v in range(len(self.var_lists)):
-                            # fisher_value += tf.reduce_sum(tf.multiply(self.fisher_info[num_task][v].astype(np.float32),
-                            #                                           tf.square(self.var_lists[v] -
-                            #                                                     self.var_lists_pre[num_task][v])))
                             fisher_value += tf.reduce_sum(tf.multiply(self.fisher_info[num_task][v].astype(np.float32),
                                                                       tf.square(self.var_lists[v] -
-                                                                                self.star_var[v])))
-                    print('fisher value: ', self.sess.run(fisher_value))
+                                                                                self.var_lists_pre[num_task][v])))
+                            # fisher_value += tf.reduce_sum(tf.multiply(self.fisher_info[num_task][v].astype(np.float32),
+                            #                                           tf.square(self.var_lists[v] -
+                            #                                                     self.star_var[v])))
+                    LOGGER.info('fisher value: %f', fisher_value)
 
-                    """ print loss differents"""
-                    loss_ewc = self.sess.run(self.solver.ewc_loss, feed_dict=feed_dict)
-                    print('loss difference:', loss_ewc - loss_nature)
+                    # """ print loss differents"""
+                    # loss_ewc = self.sess.run(self.solver.ewc_loss, feed_dict=feed_dict)
+                    # print('loss difference:', loss_ewc - loss_nature)
 
                 average_loss = 0
                 average_loss_nature = 0
@@ -703,6 +727,15 @@ class PolicyOptTf(PolicyOpt):
 
         """ save varibles """
         self.save_variable(self.num_task)
+        policy = self.policy
+        policy_var = []
+        policy_var.append(policy.bias)
+        policy_var.append(policy.chol_pol_covar)
+        policy_var.append(policy.dU)
+        policy_var.append(policy.scale)
+        policy_var.append(policy.x_idx)
+        pickle.dump(policy_var, open(self.path_name + 'policy_var_%d.pkl' % self.num_task, 'wb'))
+
 
         return self.policy
 
@@ -783,4 +816,35 @@ class PolicyOptTf(PolicyOpt):
             f.write(state['wts'])
             f.seek(0)
             self.restore_model(f.name)
+
+    def step_add(self, decay_step, step=1):
+        """ add the length to decay_step"""
+        add_op = decay_step.assign_add(step)
+        self.sess.run(add_op)
+
+    def reset_lr(self):
+        """ reset learning rate"""
+        del self.learning_rate
+        self.decay_step.assign(0)
+        self.learning_rate = tf.train.exponential_decay(0.01, global_step=self.decay_step,
+                                                        decay_steps=500,
+                                                        decay_rate=0.8)
+    def restore_trained_policy(self, num_task):
+        """ restore the policy trained at num_task position"""
+        self.restore(num_task)
+        self.fisher_info = pickle.load(open(self.path_name + 'fisher_info_%d.pkl' % (num_task), 'rb'))
+
+        policy = self.policy
+        policy_var = pickle.load(open(self.path_name + 'policy_var_%d.pkl' % num_task, 'rb'))
+        policy.bias = policy_var[0]
+        policy.chol_pol_covar = policy_var[1]
+        policy.dU = policy_var[2]
+        policy.scale = policy_var[3]
+        policy.x_idx = policy_var[4]
+
+        self.var_lists_pre = []
+        for i in range(num_task + 1):
+            self.var_lists_pre.append(pickle.load(open(self.path_name + 'var_lists_%d.pkl' % i, 'rb')))
+        self.num_task = num_task + 1
+
 

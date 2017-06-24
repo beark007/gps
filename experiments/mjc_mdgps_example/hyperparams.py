@@ -77,7 +77,7 @@ agent = {
 algorithm = {
     'type': AlgorithmMDGPS,
     'conditions': common['conditions'],
-    'iterations': 12,
+    'iterations': 20,
     'kl_step': 1.0,
     'min_step_mult': 0.5,
     'max_step_mult': 3.0,
@@ -156,7 +156,7 @@ algorithm['policy_opt'] = {
             'sensor_dims':SENSOR_DIMS,
             },
         'network_model':tf_network,
-        'iterations': 6000,
+        'iterations': 10000,
         'weights_file_prefix': EXP_DIR + 'policy',
 }
 
@@ -179,3 +179,4 @@ config = {
 }
 
 common['info'] = generate_experiment_info(config)
+agent['target_ee_points'] = fk_cost['target_end_effector']

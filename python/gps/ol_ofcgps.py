@@ -100,7 +100,7 @@ class GPSMain(object):
         # test_position = self.data_logger.unpickle('./position/all_test_position.pkl')
         all_position_train = np.zeros(position_train.shape)
 
-        for num_pos in range(position_train.shape[0]):
+        for num_pos in range(3, position_train.shape[0]):
         # for num_pos in range(2):
             """ load train position and reset agent model. """
             flag_fail = True
@@ -251,15 +251,11 @@ class GPSMain(object):
                     self.data_logger.pickle('./position/wt_%d.pkl' % num_pos, train_wt)
 
                     if num_pos == 0:
-                        self.algorithm.policy_opt.update_ewc(train_obs_data, train_mu, train_prc, train_wt,
+                        self.algorithm.policy_opt.update_ewc(train_obs_data, train_mu, train_prc, train_wt, 1,
                                                              with_ewc=False, compute_fisher=False)
                     else:
-                        if num_pos == 2:
-                            self.algorithm.policy_opt.update_ewc(train_obs_data, train_mu, train_prc, train_wt,
-                                                                 with_ewc=False, compute_fisher=False)
-                        else:
-                            self.algorithm.policy_opt.update_ewc(train_obs_data, train_mu, train_prc, train_wt,
-                                                                 with_ewc=False, compute_fisher=False)
+                        self.algorithm.policy_opt.update_ewc(train_obs_data, train_mu, train_prc, train_wt, 1,
+                                                             with_ewc=False, compute_fisher=False)
                     # test the trained in the current position
                     print('test current policy.....')
                     self.test_current_policy()
@@ -279,8 +275,8 @@ class GPSMain(object):
                     # self.data_logger.pickle('./position/all_cost_%d.pkl' % num_pos, cost)
                     # self.data_logger.pickle('./position/all_suc_count_%d.pkl' % num_pos, pos_suc_count)
                     #
-                    # self.data_logger.pickle('./position/all_train_position.pkl', all_position_train)
-                    # self.data_logger.pickle('./position/all_test_position.pkl', test_position)
+                    self.data_logger.pickle('./position/all_train_position.pkl', all_position_train)
+                    self.data_logger.pickle('./position/all_test_position.pkl', test_position)
 
                     # if ns
 

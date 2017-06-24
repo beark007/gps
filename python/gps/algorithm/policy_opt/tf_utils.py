@@ -223,32 +223,42 @@ class TfSolver:
         final_values = np.concatenate([values[i] for i in range(len(values))])
         return final_values
 
-    def update_loss(self, fisher_info=None, var_lists=None, var_lists_old=None, lam=None):
+    def update_loss(self, fisher_info=None, var_lists=None, var_lists_old=None, lam_bas=None):
         """
         update loss when encounter a new condition
         """
+        # if fisher_info:
+        #     self.ewc_loss = self.loss_scalar
+        #     """ this code will be use all task var_lists"""
+        #     len_fisher_info = len(fisher_info)
+        #     lam_weight = [lam_bas] * len_fisher_info
+        #     for num_task in range(len(fisher_info)):
+        #         lam = lam_weight[num_task] - (len_fisher_info - num_task) * 5
+        #         for v in range(len(var_lists)):
+        #             self.ewc_loss += (lam/2) * tf.reduce_sum(tf.multiply(fisher_info[num_task][v].astype(np.float32),
+        #                                                      tf.square(var_lists[v] - var_lists_old[num_task][v])))
+
+        """ use weight lam according to train position distance"""
         if fisher_info:
-            if not hasattr(self, "ewc_loss"):
-                self.ewc_loss = self.loss_scalar
-            else:
-                self.ewc_loss = self.loss_scalar
-                """ this code will be use all task var_lists"""
-                for num_task in range(len(fisher_info)):
-                    for v in range(len(var_lists)):
-                        self.ewc_loss += (lam/2) * tf.reduce_sum(tf.multiply(fisher_info[num_task][v].astype(np.float32),
-                                                                 tf.square(var_lists[v] - var_lists_old[num_task][v])))
-                """ this code will be use the previous var_lists"""
-                # for num_task in range(len(fisher_info)):
-                #     for v in range(len(var_lists)):
-                #         self.ewc_loss += (lam/2) * tf.reduce_sum(tf.multiply(fisher_info[num_task][v].astype(np.float32),
-                #                                                              tf.square(var_lists[v] - var_lists_old[v])))
-                """ this code will be use the weight all task var_lists"""
-                # weights = [0.1] * (len(fisher_info) - 1)
-                # weights.append(1)
-                # for num_task in range(len(fisher_info)):
-                #     for v in range(len(var_lists)):
-                #         self.ewc_loss += weights[num_task] * (lam/2) * tf.reduce_sum(tf.multiply(fisher_info[num_task][v].astype(np.float32),
-                #                                                  tf.square(var_lists[v] - var_lists_old[num_task][v])))
+            self.ewc_loss = self.loss_scalar
+            """ this code will be use all task var_lists"""
+            for num_task in range(len(fisher_info)):
+                for v in range(len(var_lists)):
+                    self.ewc_loss += (lam_bas[num_task]/2) * tf.reduce_sum(tf.multiply(fisher_info[num_task][v].astype(np.float32),
+                                                             tf.square(var_lists[v] - var_lists_old[num_task][v])))
+
+            """ this code will be use the previous var_lists"""
+            # for num_task in range(len(fisher_info)):
+            #     for v in range(len(var_lists)):
+            #         self.ewc_loss += (lam/2) * tf.reduce_sum(tf.multiply(fisher_info[num_task][v].astype(np.float32),
+            #                                                              tf.square(var_lists[v] - var_lists_old[v])))
+            """ this code will be use the weight all task var_lists"""
+            # weights = [0.1] * (len(fisher_info) - 1)
+            # weights.append(1)
+            # for num_task in range(len(fisher_info)):
+            #     for v in range(len(var_lists)):
+            #         self.ewc_loss += weights[num_task] * (lam/2) * tf.reduce_sum(tf.multiply(fisher_info[num_task][v].astype(np.float32),
+            #                                                  tf.square(var_lists[v] - var_lists_old[num_task][v])))
 
         else:
             self.ewc_loss = self.loss_scalar
@@ -264,7 +274,7 @@ class TfSolver:
         # self.ewc_loss += loss_regularization
 
         # l2_loss
-        l2_regularization = tf_layers.l2_regularizer(scale=0.01, scope='l1_regularization')
+        l2_regularization = tf_layers.l2_regularizer(scale=0.05, scope='l2_regularization')
         loss_regularization = tf_layers.apply_regularization(l2_regularization, var_regular)
         self.ewc_loss += loss_regularization
 
@@ -281,11 +291,12 @@ class TfSolver:
             for v in range(len(var_list)):
                 sess.run(var_list[v].assign(self.star_vars[v]))
 
-    def reset_solver_op(self, loss, var_lists):
+    def reset_solver_op(self, loss, var_lists, learning_rate=0.005, global_step=None):
         """ using Adam as default optimizer"""
 
-        return tf.train.AdamOptimizer(learning_rate=self.base_lr,
-                                      beta1=self.momentum).minimize(loss, var_list=var_lists)
+        return tf.train.AdamOptimizer(learning_rate=learning_rate,
+                                      beta1=self.momentum).minimize(loss, var_list=var_lists,
+                                                                    global_step=global_step)
 
 
     def __call__(self, feed_dict, sess, device_string="/cpu:0", use_fc_solver=False):
@@ -293,17 +304,17 @@ class TfSolver:
             if use_fc_solver:
                 # loss = sess.run([self.loss_scalar, self.fc_solver_op], feed_dict)
                 if hasattr(self, "fisher_value"):
-                    loss = sess.run([self.ewc_loss, self.fc_solver_op,
-                                     self.fisher_value, self.loss_scalar, self.summery], feed_dict)
+                    loss = sess.run([self.ewc_loss, self.loss_scalar, self.fc_solver_op,
+                                     self.fisher_value,  self.summery], feed_dict)
                 else:
-                    loss = sess.run([self.ewc_loss, self.fc_solver_op, self.summery], feed_dict)
+                    loss = sess.run([self.ewc_loss, self.loss_scalar, self.fc_solver_op, self.summery], feed_dict)
                 print('using fc solver')
             else:
                 # loss = sess.run([self.loss_scalar, self.solver_op], feed_dict)
                 if hasattr(self, "fisher_value"):
-                    loss = sess.run([self.ewc_loss, self.solver_op,
-                                     self.fisher_value, self.loss_scalar, self.summery], feed_dict)
+                    loss = sess.run([self.ewc_loss, self.loss_scalar, self.solver_op,
+                                     self.fisher_value, self.summery], feed_dict)
                 else:
-                    loss = sess.run([self.ewc_loss, self.solver_op, self.summery], feed_dict)
+                    loss = sess.run([self.ewc_loss, self.loss_scalar, self.solver_op, self.summery], feed_dict)
             return loss
 

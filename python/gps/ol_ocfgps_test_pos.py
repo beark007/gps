@@ -89,79 +89,31 @@ class GPSMain(object):
         #     else:
         #         test_position = np.concatenate((test_position, test_data), axis=0)
 
-        count_compute = 0
+        """ load data"""
+        test_positions = self.data_logger.unpickle('./position/test_position.pkl')
 
-        # num_restore = 3
-        # self.algorithm.policy_opt.restore_trained_policy(num_restore)
-        # count_compute = num_restore + 1
+        """ reset the NN policy"""
+        num_task = 5
+        self.algorithm.policy_opt.restore(num_task)
+        policy = self.algorithm.policy_opt.policy
+        policy_var = self.data_logger.unpickle('./position/policy_var_%d.pkl' % num_task)
+        policy.bias = policy_var[0]
+        policy.chol_pol_covar = policy_var[1]
+        policy.dU = policy_var[2]
+        policy.scale = policy_var[3]
+        policy.x_idx = policy_var[4]
 
-        position_train = self.data_logger.unpickle('./position/all_train_position.pkl')
-        len_train = position_train.shape[0]
+        """ test policy"""
+        cost, pos_suc_count, ee_distance = self.test_cost(test_positions)
 
-        for num_pos in range(len_train):
-            """ load data"""
-            train_mu = self.data_logger.unpickle('./position/mu_%d.pkl' % num_pos)
-            train_obs_data = self.data_logger.unpickle('./position/obs_%d.pkl' % num_pos)
-            train_prc = self.data_logger.unpickle('./position/prc_%d.pkl' % num_pos)
-            train_wt = self.data_logger.unpickle('./position/wt_%d.pkl' % num_pos)
-            train_positions = self.data_logger.unpickle('./position/position_train.pkl')
-            lam_bas = 10
-            distance_bas = 0.30
-            lam = []
-            for i in range(num_pos):
-                diff_distance = (train_positions[num_pos] - train_positions[i]) / distance_bas
-                diff_sqrt_distance = np.sqrt(np.sum(np.square(diff_distance)))
-                lam.append(lam_bas * diff_sqrt_distance * 1.5)
+        file_path = './position/result/'
+        policy_name = 'ocf_'
+        self.data_logger.pickle(file_path + policy_name + 'cost.pkl', cost)
+        self.data_logger.pickle(file_path + policy_name + 'suc.pkl', pos_suc_count)
+        self.data_logger.pickle(file_path + policy_name + 'distance.pkl', ee_distance)
 
 
-            """ train NN"""
-            # self.algorithm.policy_opt.update(train_obs_data, train_mu, train_prc, train_wt)
 
-            if count_compute == 0:
-                self.algorithm.policy_opt.update_ewc(train_obs_data, train_mu, train_prc, train_wt, lam,
-                                                     with_ewc=False, compute_fisher=False, with_traj=True)
-            elif count_compute < len_train-1:
-                self.algorithm.policy_opt.update_ewc(train_obs_data, train_mu, train_prc, train_wt, lam,
-                                                     with_ewc=True, compute_fisher=False, with_traj=True)
-            else:
-                self.algorithm.policy_opt.update_ewc(train_obs_data, train_mu, train_prc, train_wt, lam,
-                                                     with_ewc=True, compute_fisher=False, with_traj=True)
-            if count_compute == len_train-1:
-                print('123')
-
-            """ test current policy"""
-            # self.test_current_policy()
-
-            """ test NN in different positions"""
-            test_position = None
-            for test_idx in range(num_pos+1):
-                if test_idx == 0:
-                    test_position = self.data_logger.unpickle('./position/test_position_%d.pkl' % (test_idx))
-                else:
-                    test_pos = self.data_logger.unpickle('./position/test_position_%d.pkl' % (test_idx ))
-                    test_position = np.concatenate((test_position, test_pos), axis=0)
-
-            cost, pos_suc_count, ee_distance = self.test_cost(test_position)
-
-            """ we move the compute fisher info here"""
-            if count_compute < len_train-1:
-                self.algorithm.policy_opt.compute_traj_fisher()
-            else:
-                self.algorithm.policy_opt.num_task += 1
-
-            self.data_logger.pickle('./position/all_distance_%d.pkl' % num_pos, ee_distance)
-            self.data_logger.pickle('./position/all_cost_%d.pkl' % num_pos, cost)
-            self.data_logger.pickle('./position/all_suc_count_%d.pkl' % num_pos, pos_suc_count)
-
-            """ save the current opt action"""
-            # load traj obs
-            traj_obs = np.load('./position/good_trajectory_obs_%d.npy' % num_pos)
-            traj_obs = np.expand_dims(traj_obs, axis=0)
-            traj_action, _, _, _ = self.algorithm.policy_opt.prob(traj_obs)
-            traj_action = traj_action[0, :, :]
-            np.save('./position/nn_trajectory_action_%d.npy' % num_pos, traj_action)
-
-            count_compute += 1
 
         self._end()
 

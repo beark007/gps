@@ -78,6 +78,8 @@ class GPSMain(object):
 
             # Clear agent samples.
             self.agent.clear_samples()
+            if itr >= 10:
+                print('123')
 
             self._take_iteration(itr, traj_sample_lists)
             pol_sample_lists = self._take_policy_samples()
@@ -535,7 +537,7 @@ def main():
             """ if specify the N training position"""
             num_position = args.condition
             data_logger = DataLogger()
-            positions = data_logger.unpickle('./position/train_position.pkl')
+            positions = data_logger.unpickle('./position/position_train.pkl')
             # positions = data_logger.unpickle('./position/suc_train_position.pkl')
             hyperparams.agent['conditions'] = num_position
             hyperparams.common['conditions'] = num_position
@@ -561,6 +563,7 @@ def main():
         set extend setting
         """
         data_logger = DataLogger()
+        # train_position = data_logger.unpickle('./position/position_train.pkl')
         train_position = data_logger.unpickle('./position/all_train_position.pkl')
         hyperparams.agent['pos_body_offset'] = list(train_position)
         hyperparams.agent['conditions'] = len(train_position)
