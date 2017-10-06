@@ -55,8 +55,11 @@ agent = {
     'substeps': 5,
     'conditions': common['conditions'],
     'pos_body_idx': np.array([1]),
-    'pos_body_offset': [[np.array([0, 0.2, 0])], [np.array([0, 0.1, 0])],
-                        [np.array([0, -0.1, 0])], [np.array([0, -0.2, 0])]],
+    #'pos_body_offset': [[np.array([0, 0.2, 0])], [np.array([0, 0.1, 0])],
+    #                    [np.array([0, -0.1, 0])], [np.array([0, -0.2, 0])]],
+    #'pos_body_offset': [np.array([0, 0, 0])],
+    'pos_body_offset': [[np.array([0, 0, 0])], [np.array([0, 0, 0])],
+                        [np.array([0, 0, 0])], [np.array([0, 0, 0])]],
     'T': 100,
     'sensor_dims': SENSOR_DIMS,
     'state_include': [JOINT_ANGLES, JOINT_VELOCITIES, END_EFFECTOR_POINTS,
@@ -68,7 +71,7 @@ agent = {
 algorithm = {
     'type': AlgorithmTrajOpt,
     'conditions': common['conditions'],
-    'iterations': 10,
+    'iterations': 15,
 }
 
 algorithm['init_traj_distr'] = {
@@ -89,7 +92,7 @@ torque_cost = {
 
 fk_cost = {
     'type': CostFK,
-    'target_end_effector': np.array([0.0, 0.3, -0.5, 0.0, 0.3, -0.2]),
+    'target_end_effector': [np.array([-0.1, 0.4, -0.5, -0.1, 0.4, -0.2]), np.array([0.1, 0.4, -0.5, 0.1, 0.4, -0.2]), np.array([-0.1, 0.2, -0.5, -0.1, 0.2, -0.2]), np.array([0.1, 0.2, -0.5, 0.1, 0.2, -0.2])],
     'wp': np.array([1, 1, 1, 1, 1, 1]),
     'l1': 0.1,
     'l2': 10.0,
@@ -125,8 +128,9 @@ config = {
     'verbose_trials': 1,
     'common': common,
     'agent': agent,
-    'gui_on': True,
+    'gui_on': False,
     'algorithm': algorithm,
+    'fk_cost': fk_cost,
 }
 
 common['info'] = generate_experiment_info(config)

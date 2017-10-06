@@ -79,8 +79,8 @@ def tf_network(dim_input=27, dim_output=7, batch_size=25, network_config=None):
     Returns:
         a TfMap object used to serialize, inputs, outputs, and loss.
     """
-    n_layers = 3 if 'n_layers' not in network_config else network_config['n_layers'] + 1
-    dim_hidden = (n_layers - 1) * [42] if 'dim_hidden' not in network_config else network_config['dim_hidden']
+    n_layers = 2 if 'n_layers' not in network_config else network_config['n_layers'] + 1
+    dim_hidden = (n_layers - 1) * [40] if 'dim_hidden' not in network_config else network_config['dim_hidden']
     dim_hidden.append(dim_output)
 
     nn_input, action, precision = get_input_layer(dim_input, dim_output)
@@ -158,7 +158,7 @@ def multi_modal_network(dim_input=27, dim_output=7, batch_size=25, network_confi
 
     conv_out_flat = tf.reshape(conv_layer_1, [-1, conv_out_size])
 
-    fc_input = tf.concat(concat_dim=1, values=[conv_out_flat, state_input])
+    fc_input = tf.concat(axis=1, values=[conv_out_flat, state_input])
 
     fc_output, _, _ = get_mlp_layers(fc_input, n_layers, dim_hidden)
 
@@ -254,7 +254,7 @@ def multi_modal_network_fp(dim_input=27, dim_output=7, batch_size=25, network_co
     fp_x = tf.reduce_sum(tf.multiply(x_map, softmax), [1], keep_dims=True)
     fp_y = tf.reduce_sum(tf.multiply(y_map, softmax), [1], keep_dims=True)
 
-    fp = tf.reshape(tf.concat(axis=1, values=[fp_x, fp_y]), [-1, num_fp*2])
+    fp = tf.reshape(tf.concat(1, [fp_x, fp_y]), [-1, num_fp*2])
 
     fc_input = tf.concat(axis=1, values=[fp, state_input])
 

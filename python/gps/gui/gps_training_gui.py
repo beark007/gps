@@ -325,7 +325,7 @@ class GPSTrainingGUI(object):
             itr_data = '%3d | %8.2f' % (itr, avg_cost)
         for m in range(algorithm.M):
             cost = costs[m]
-            step = algorithm.prev[m].step_mult * algorithm.base_kl_step
+            step = np.mean(algorithm.prev[m].step_mult * algorithm.base_kl_step)
             entropy = 2*np.sum(np.log(np.diagonal(algorithm.prev[m].traj_distr.chol_pol_covar,
                     axis1=1, axis2=2)))
             itr_data += ' | %8.2f %8.2f %8.2f' % (cost, step, entropy)
@@ -366,7 +366,7 @@ class GPSTrainingGUI(object):
         all_eept = np.empty((0, 3))
         sample_lists = traj_sample_lists
         if pol_sample_lists:
-            sample_lists += traj_sample_lists
+            sample_lists += pol_sample_lists
         for sample_list in sample_lists:
             for sample in sample_list.get_samples():
                 ee_pt = sample.get(END_EFFECTOR_POINTS)

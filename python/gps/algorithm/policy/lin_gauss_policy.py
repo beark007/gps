@@ -42,21 +42,6 @@ class LinearGaussianPolicy(Policy):
         u += self.chol_pol_covar[t].T.dot(noise)
         return u
 
-    def merge_act(self, policy_prev, alpha1, alpha2, x, obs, t, noise=None):
-        """
-            Return an action for a state.
-            Args:
-                x: State vector.
-                obs: Observation vector.
-                t: Time step.
-                noise: Action noise. This will be scaled by the variance.
-            """
-        # u = self.K[t].dot(x) + self.k[t]
-        u = (self.K[t] * alpha1 + policy_prev.pol_K[t] * alpha2).dot(x) + self.k[t] * alpha1 + policy_prev.pol_k[
-                                                                                                   t] * alpha2
-        u += self.chol_pol_covar[t].T.dot(noise)
-        return u
-
     def fold_k(self, noise):
         """
         Fold noise into k.

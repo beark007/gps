@@ -18,7 +18,7 @@ class CostSum(Cost):
         for cost in self._hyperparams['costs']:
             self._costs.append(cost['type'](cost))
 
-    def eval(self, sample):
+    def eval(self, sample, cond=None):
         """
         Evaluate cost function and derivatives.
         Args:
@@ -35,7 +35,10 @@ class CostSum(Cost):
         luu = luu * weight
         lux = lux * weight
         for i in range(1, len(self._costs)):
-            pl, plx, plu, plxx, pluu, plux = self._costs[i].eval(sample)
+            if cond is None:
+                pl, plx, plu, plxx, pluu, plux = self._costs[i].eval(sample)
+            else:
+                pl, plx, plu, plxx, pluu, plux = self._costs[i].eval(sample, cond)
             weight = self._weights[i]
             l = l + pl * weight
             lx = lx + plx * weight

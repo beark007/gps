@@ -12,7 +12,7 @@ from gps.proto.gps_pb2 import JOINT_ANGLES, JOINT_VELOCITIES, \
         END_EFFECTOR_POINTS, END_EFFECTOR_POINT_VELOCITIES, \
         END_EFFECTOR_POINT_JACOBIANS, ACTION, RGB_IMAGE, RGB_IMAGE_SIZE, \
         CONTEXT_IMAGE, CONTEXT_IMAGE_SIZE, IMAGE_FEAT, \
-        END_EFFECTOR_POINTS_NO_TARGET, END_EFFECTOR_POINT_VELOCITIES_NO_TARGET
+        END_EFFECTOR_POINTS_NO_TARGET, END_EFFECTOR_POINT_VELOCITIES_NO_TARGET, NOISE
 
 from gps.sample.sample import Sample
 
@@ -55,22 +55,18 @@ class AgentMuJoCo(Agent):
             self._world = [world for _ in range(self._hyperparams['conditions'])]
             self._model = [self._world[i].get_model().copy()
                            for i in range(self._hyperparams['conditions'])]
+            # for i in range(self._hyperparams['conditions']):
+            #     world = mjcpy.MJCWorld(filename)
         else:
             for i in range(self._hyperparams['conditions']):
-                print self._hyperparams['filename'][i]
-                temp = mjcpy.MJCWorld(self._hyperparams['filename'][i])
-                self._world.append(temp)
-                #self._world.append(mjcpy.MJCWorld(self._hyperparams['filename'][i]))
+                self._world.append(mjcpy.MJCWorld(self._hyperparams['filename'][i]))
                 self._model.append(self._world[i].get_model())
 
-        self.init_body_pos = list()
         for i in range(self._hyperparams['conditions']):
             for j in range(len(self._hyperparams['pos_body_idx'][i])):
                 idx = self._hyperparams['pos_body_idx'][i][j]
-                # TODO: this should actually add [i][j], but that would break things
-                #self.init_body_pos.append(self._model[i]['body_pos'][idx, :])
-                self.init_body_pos.append(copy.deepcopy(self._model[i]['body_pos'][idx, :]))
-                self._model[i]['body_pos'][idx, :] = self.init_body_pos[i] + self._hyperparams['pos_body_offset'][i]
+                self._model[i]['body_pos'][idx, :] += \
+                        self._hyperparams['pos_body_offset'][i][j]
 
         self._joint_idx = list(range(self._model[0]['nq']))
         self._vel_idx = [i + self._model[0]['nq'] for i in self._joint_idx]
@@ -103,65 +99,6 @@ class AgentMuJoCo(Agent):
                                        AGENT_MUJOCO['image_height'],
                                        cam_pos[0], cam_pos[1], cam_pos[2],
                                        cam_pos[3], cam_pos[4], cam_pos[5])
-
-    def reset_model(self, hyperparams):
-        """
-        reset the agent model to the specify condition
-        Args:
-            hyperparams:
-
-        """
-        self._hyperparams['pos_body_offset'] = hyperparams['agent']['pos_body_offset']
-        del self._model[:]
-        for i in range(self._hyperparams['conditions']):
-            self._model.append(self._world[i].get_model())
-            for j in range(len(self._hyperparams['pos_body_idx'][i])):
-                idx = self._hyperparams['pos_body_idx'][i][j]
-                self._model[i]['body_pos'][idx, :] = self.init_body_pos[i] + self._hyperparams['pos_body_offset'][i]
-        self._joint_idx = list(range(self._model[0]['nq']))
-        self._vel_idx = [i + self._model[0]['nq'] for i in self._joint_idx]
-
-        # Initialize x0.
-        self.x0 = []
-        for i in range(self._hyperparams['conditions']):
-            if END_EFFECTOR_POINTS in self.x_data_types:
-                # TODO: this assumes END_EFFECTOR_VELOCITIES is also in datapoints right?
-                self._init(i)
-                eepts = self._world[i].get_data()['site_xpos'].flatten()
-                self.x0.append(
-                    np.concatenate([self._hyperparams['x0'][i], eepts, np.zeros_like(eepts)])
-                )
-            elif END_EFFECTOR_POINTS_NO_TARGET in self.x_data_types:
-                self._init(i)
-                eepts = self._world[i].get_data()['site_xpos'].flatten()
-                eepts_notgt = np.delete(eepts, self._hyperparams['target_idx'])
-                self.x0.append(
-                    np.concatenate([self._hyperparams['x0'][i], eepts_notgt, np.zeros_like(eepts_notgt)])
-                )
-            else:
-                self.x0.append(self._hyperparams['x0'][i])
-            if IMAGE_FEAT in self.x_data_types:
-                self.x0[i] = np.concatenate([self.x0[i], np.zeros((self._hyperparams['sensor_dims'][IMAGE_FEAT],))])
-
-        cam_pos = self._hyperparams['camera_pos']
-        for i in range(self._hyperparams['conditions']):
-            self._world[i].init_viewer(AGENT_MUJOCO['image_width'],
-                                       AGENT_MUJOCO['image_height'],
-                                       cam_pos[0], cam_pos[1], cam_pos[2],
-                                       cam_pos[3], cam_pos[4], cam_pos[5])
-
-    def get_ee_pos(self, condition):
-        """
-        get one of the end effector position
-        Args:
-            condition: the initial num of training position
-
-        Returns:
-            ee_pos: ee position
-        """
-        data = self._world[condition].get_data()
-        ee_pos = data['site_xpos'].flatten()
-        return ee_pos
 
     def sample(self, policy, condition, verbose=True, save=True, noisy=True):
         """
@@ -207,63 +144,10 @@ class AgentMuJoCo(Agent):
             if (t + 1) < self.T:
                 for _ in range(self._hyperparams['substeps']):
                     mj_X, _ = self._world[condition].step(mj_X, mj_U)
-                #TODO: Some hidden state stuff will go here.
                 self._data = self._world[condition].get_data()
                 self._set_sample(new_sample, mj_X, t, condition, feature_fn=feature_fn)
         new_sample.set(ACTION, U)
-        if save:
-            self._samples[condition].append(new_sample)
-        return new_sample
-
-    def merge_controller(self, policy_cur, alpha1, policy_prev, alpha2, condition, verbose=True, save=True, noisy=True):
-        """
-            Runs a trial and constructs a new sample containing information
-            about the trial.
-            Args:
-                policy: Policy to to used in the trial.
-                condition: Which condition setup to run.
-                verbose: Whether or not to plot the trial.
-                save: Whether or not to store the trial into the samples.
-                noisy: Whether or not to use noise during sampling.
-            """
-        # Create new sample, populate first time step.
-        feature_fn = None
-        if 'get_features' in dir(policy_cur):
-            feature_fn = policy_cur.get_features
-        new_sample = self._init_sample(condition, feature_fn=feature_fn)
-        mj_X = self._hyperparams['x0'][condition]
-        U = np.zeros([self.T, self.dU])
-        if noisy:
-            noise = generate_noise(self.T, self.dU, self._hyperparams)
-        else:
-            noise = np.zeros((self.T, self.dU))
-        if np.any(self._hyperparams['x0var'][condition] > 0):
-            x0n = self._hyperparams['x0var'] * \
-                  np.random.randn(self._hyperparams['x0var'].shape)
-            mj_X += x0n
-        noisy_body_idx = self._hyperparams['noisy_body_idx'][condition]
-        if noisy_body_idx.size > 0:
-            for i in range(len(noisy_body_idx)):
-                idx = noisy_body_idx[i]
-                var = self._hyperparams['noisy_body_var'][condition][i]
-                self._model[condition]['body_pos'][idx, :] += \
-                    var * np.random.randn(1, 3)
-        # Take the sample.
-        for t in range(self.T):
-            X_t = new_sample.get_X(t=t)
-            obs_t = new_sample.get_obs(t=t)
-            mj_U = policy_cur.merge_act(policy_prev, alpha1, alpha2, X_t, obs_t, t, noise[t, :])
-            # mj_U = policy_cur.act(X_t, obs_t, t, noise[t, :])
-            U[t, :] = mj_U
-            if verbose:
-                self._world[condition].plot(mj_X)
-            if (t + 1) < self.T:
-                for _ in range(self._hyperparams['substeps']):
-                    mj_X, _ = self._world[condition].step(mj_X, mj_U)
-                # TODO: Some hidden state stuff will go here.
-                self._data = self._world[condition].get_data()
-                self._set_sample(new_sample, mj_X, t, condition, feature_fn=feature_fn)
-        new_sample.set(ACTION, U)
+        new_sample.set(NOISE, noise)
         if save:
             self._samples[condition].append(new_sample)
         return new_sample
@@ -399,8 +283,3 @@ class AgentMuJoCo(Agent):
         img = obs[imstart:imend]
         img = img.reshape((image_width, image_height, image_channels))
         return img
-
-    def get_ee_point(self, condition):
-        data = self._world[condition].get_data()
-        ee_points = data['site_xpos'].flatten()
-        return ee_points

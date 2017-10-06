@@ -84,41 +84,113 @@
             </body>
         </body>
 
-        <body name="g1" pos="0.034 0.3 -0.47" axisangle="0 1 0 0.05">
-            <geom name="g1" rgba="0.2 0.2 0.2 1" type="box" size="0.003 0.01 0.05" contype="1" conaffinity="1" />
+        <body name="toplefthole" pos="-0.1 0.1 0">
+          <body name="tlg1" pos="0.034 0.3 -0.47" axisangle="0 1 0 0.05">
+              <geom name="tlg1" rgba="0.2 0.2 0.2 1" type="box" size="0.003 0.01 0.05" contype="1" conaffinity="1" />
+          </body>
+
+          <body name="tlg2" pos="-0.034 0.3 -0.47" axisangle="0 1 0 -0.05">
+              <geom name="tlg2" rgba="0.2 0.2 0.2 1" type="box" size="0.003 0.01 0.05" contype="1" conaffinity="1" />
+          </body>
+
+          <body name="tlg3" pos="0.0 0.334 -0.47" axisangle="1 0 0 -0.05">
+              <geom name="tlg3" rgba="0.2 0.2 0.2 1" type="box" size="0.01 0.003 0.05" contype="1" conaffinity="1" />
+          </body>
+
+          <body name="tlg4" pos="0.0 0.266 -0.47" axisangle="1 0 0 0.05">
+              <geom name="tlg4" rgba="0.2 0.2 0.2 1" type="box" size="0.01 0.003 0.05" contype="1" conaffinity="1" />
+          </body>
         </body>
 
-        <body name="g2" pos="-0.034 0.3 -0.47" axisangle="0 1 0 -0.05">
-            <geom name="g2" rgba="0.2 0.2 0.2 1" type="box" size="0.003 0.01 0.05" contype="1" conaffinity="1" />
+        <body name="downlefthole" pos="-0.1 -0.1 0">
+          <body name="dlg1" pos="0.034 0.3 -0.47" axisangle="0 1 0 0.05">
+              <geom name="dlg1" rgba="0.2 0.2 0.2 1" type="box" size="0.003 0.01 0.05" contype="1" conaffinity="1" />
+          </body>
+
+          <body name="dlg2" pos="-0.034 0.3 -0.47" axisangle="0 1 0 -0.05">
+              <geom name="dlg2" rgba="0.2 0.2 0.2 1" type="box" size="0.003 0.01 0.05" contype="1" conaffinity="1" />
+          </body>
+
+          <body name="dlg3" pos="0.0 0.334 -0.47" axisangle="1 0 0 -0.05">
+              <geom name="dlg3" rgba="0.2 0.2 0.2 1" type="box" size="0.01 0.003 0.05" contype="1" conaffinity="1" />
+          </body>
+
+          <body name="dlg4" pos="0.0 0.266 -0.47" axisangle="1 0 0 0.05">
+              <geom name="dlg4" rgba="0.2 0.2 0.2 1" type="box" size="0.01 0.003 0.05" contype="1" conaffinity="1" />
+          </body>
         </body>
 
-        <body name="g3" pos="0.0 0.334 -0.47" axisangle="1 0 0 -0.05">
-            <geom name="g3" rgba="0.2 0.2 0.2 1" type="box" size="0.01 0.003 0.05" contype="1" conaffinity="1" />
+        <body name="toprighthole" pos="0.1 0.1 0">
+          <body name="trg1" pos="0.034 0.3 -0.47" axisangle="0 1 0 0.05">
+              <geom name="trg1" rgba="0.2 0.2 0.2 1" type="box" size="0.003 0.01 0.05" contype="1" conaffinity="1" />
+          </body>
+
+          <body name="trg2" pos="-0.034 0.3 -0.47" axisangle="0 1 0 -0.05">
+              <geom name="trg2" rgba="0.2 0.2 0.2 1" type="box" size="0.003 0.01 0.05" contype="1" conaffinity="1" />
+          </body>
+
+          <body name="trg3" pos="0.0 0.334 -0.47" axisangle="1 0 0 -0.05">
+              <geom name="trg3" rgba="0.2 0.2 0.2 1" type="box" size="0.01 0.003 0.05" contype="1" conaffinity="1" />
+          </body>
+
+          <body name="trg4" pos="0.0 0.266 -0.47" axisangle="1 0 0 0.05">
+              <geom name="trg4" rgba="0.2 0.2 0.2 1" type="box" size="0.01 0.003 0.05" contype="1" conaffinity="1" />
+          </body>
         </body>
 
-        <body name="g4" pos="0.0 0.266 -0.47" axisangle="1 0 0 0.05">
-            <geom name="g4" rgba="0.2 0.2 0.2 1" type="box" size="0.01 0.003 0.05" contype="1" conaffinity="1" />
+        <body name="downrighthole" pos="0.1 -0.1 0">
+          <body name="drg1" pos="0.034 0.3 -0.47" axisangle="0 1 0 0.05">
+              <geom name="drg1" rgba="0.2 0.2 0.2 1" type="box" size="0.003 0.01 0.05" contype="1" conaffinity="1" />
+          </body>
+
+          <body name="drg2" pos="-0.034 0.3 -0.47" axisangle="0 1 0 -0.05">
+              <geom name="drg2" rgba="0.2 0.2 0.2 1" type="box" size="0.003 0.01 0.05" contype="1" conaffinity="1" />
+          </body>
+
+          <body name="drg3" pos="0.0 0.334 -0.47" axisangle="1 0 0 -0.05">
+              <geom name="drg3" rgba="0.2 0.2 0.2 1" type="box" size="0.01 0.003 0.05" contype="1" conaffinity="1" />
+          </body>
+
+          <body name="drg4" pos="0.0 0.266 -0.47" axisangle="1 0 0 0.05">
+              <geom name="drg4" rgba="0.2 0.2 0.2 1" type="box" size="0.01 0.003 0.05" contype="1" conaffinity="1" />
+          </body>
         </body>
 
-        <body name="fl" pos="0.0 0.3 -0.55">
-            <geom name="fl" rgba="0.2 0.2 0.2 1" type="box" size="0.2 0.2 0.05" contype="1" conaffinity="1" />
-        </body>
+        <body name="ground" pos="0.0 0.3 -0.55">
+    		    <geom name="ground" rgba="0.2 0.2 0.2 1" type="box" size="0.4 0.4 0.05" contype="1" conaffinity="1" />
+    		</body>
 
-        <body name="w1" pos="0.216 0.3 -0.45">
-            <geom name="w1" rgba="0.2 0.2 0.2 1" type="box" size="0.183 0.3 0.05" contype="1" conaffinity="1" />
-        </body>
+        <body name="crect1" pos="0.0 0.535 -0.45">
+    		    <geom name="crect1" rgba="0 0 1 1" type="box" size="0.4 0.1 0.05" contype="1" conaffinity="1" />
+    		</body>
+        <body name="crect2" pos="0.0 0.3 -0.45">
+    		    <geom name="crect2" rgba="0 0 1 1" type="box" size="0.4 0.066 0.05" contype="1" conaffinity="1" />
+    		</body>
+        <body name="crect3" pos="0.0 0.066 -0.45">
+    		    <geom name="crect3" rgba="0 0 1 1" type="box" size="0.4 0.1 0.05" contype="1" conaffinity="1" />
+    		</body>
 
-        <body name="w2" pos="-0.216 0.3 -0.45">
-            <geom name="w2" rgba="0.2 0.2 0.2 1" type="box" size="0.183 0.3 0.05" contype="1" conaffinity="1" />
-        </body>
+        <body name="trect1" pos="-0.234 0.4 -0.45">
+    		    <geom name="trect1" rgba="1 1 1 1" type="box" size="0.1 0.035 0.05" contype="1" conaffinity="1" />
+    		</body>
+        <body name="trect2" pos="0 0.4 -0.45">
+    		    <geom name="trect2" rgba="0 1 0 1" type="box" size="0.066 0.035 0.05" contype="1" conaffinity="1" />
+    		</body>
+        <body name="trect3" pos="0.234 0.4 -0.45">
+    		    <geom name="trect3" rgba="1 1 1 1" type="box" size="0.1 0.035 0.05" contype="1" conaffinity="1" />
+    		</body>
 
-        <body name="w3" pos="0.0 0.516 -0.45">
-            <geom name="w3" rgba="0.2 0.2 0.2 1" type="box" size="0.032 0.183 0.05" contype="1" conaffinity="1" />
-        </body>
-        
-        <body name="w4" pos="0.0 0.084 -0.45">
-            <geom name="w4" rgba="0.2 0.2 0.2 1" type="box" size="0.032 0.183 0.05" contype="1" conaffinity="1" />
-        </body>
+        <body name="drect1" pos="-0.234 0.2 -0.45">
+    		    <geom name="drect1" rgba="1 1 1 1" type="box" size="0.1 0.035 0.05" contype="1" conaffinity="1" />
+    		</body>
+        <body name="drect2" pos="0 0.2 -0.45">
+    		    <geom name="drect2" rgba="0 1 0 1" type="box" size="0.066 0.035 0.05" contype="1" conaffinity="1" />
+    		</body>
+        <body name="drect3" pos="0.234 0.2 -0.45">
+    		    <geom name="drect3" rgba="1 1 1 1" type="box" size="0.1 0.035 0.05" contype="1" conaffinity="1" />
+    		</body>
+
+
     </worldbody>
 
     <actuator>
