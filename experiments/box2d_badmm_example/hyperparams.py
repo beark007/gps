@@ -16,7 +16,9 @@ from gps.algorithm.dynamics.dynamics_lr_prior import DynamicsLRPrior
 from gps.algorithm.dynamics.dynamics_prior_gmm import DynamicsPriorGMM
 from gps.algorithm.policy.policy_prior_gmm import PolicyPriorGMM
 from gps.algorithm.traj_opt.traj_opt_lqr_python import TrajOptLQRPython
-from gps.algorithm.policy_opt.policy_opt_caffe import PolicyOptCaffe
+# from gps.algorithm.policy_opt.policy_opt_caffe import PolicyOptCaffe
+from gps.algorithm.policy_opt.policy_opt_tf import PolicyOptTf
+from gps.algorithm.policy_opt.tf_model_example import tf_network
 from gps.algorithm.policy.lin_gauss_init import init_lqr
 from gps.gui.config import generate_experiment_info
 from gps.proto.gps_pb2 import JOINT_ANGLES, JOINT_VELOCITIES, END_EFFECTOR_POINTS, ACTION
@@ -126,10 +128,22 @@ algorithm['traj_opt'] = {
     'type': TrajOptLQRPython,
 }
 
+# algorithm['policy_opt'] = {
+#     'type': PolicyOptCaffe,
+#     'weights_file_prefix': EXP_DIR + 'policy',
+# }
 algorithm['policy_opt'] = {
-    'type': PolicyOptCaffe,
-    'weights_file_prefix': EXP_DIR + 'policy',
+        'type': PolicyOptTf,
+        'network_params':{
+            'obs_include':[JOINT_ANGLES, JOINT_VELOCITIES, END_EFFECTOR_POINTS],
+            'obs_vector_data':[JOINT_ANGLES, JOINT_VELOCITIES, END_EFFECTOR_POINTS],
+            'sensor_dims':SENSOR_DIMS,
+            },
+        'network_model':tf_network,
+        'iterations': 4000,
+        'weights_file_prefix': EXP_DIR + 'policy',
 }
+
 
 algorithm['policy_prior'] = {
     'type': PolicyPriorGMM,
@@ -141,11 +155,11 @@ algorithm['policy_prior'] = {
 config = {
     'iterations': 10,
     'num_samples': 5,
-    'verbose_trials': 5,
+    'verbose_trials': 1,
     'verbose_policy_trials': 0,
     'common': common,
     'agent': agent,
-    'gui_on': True,
+    'gui_on': False,
     'algorithm': algorithm,
 }
 

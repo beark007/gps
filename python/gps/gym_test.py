@@ -18,7 +18,6 @@ sys.path.append('/'.join(str.split(__file__, '/')[:-2]))
 from gps.gui.gps_training_gui import GPSTrainingGUI
 from gps.utility.data_logger import DataLogger
 from gps.sample.sample_list import SampleList
-import numpy as np
 
 
 class GPSMain(object):
@@ -51,7 +50,7 @@ class GPSMain(object):
         config['algorithm']['agent'] = self.agent
         self.algorithm = config['algorithm']['type'](config['algorithm'])
 
-    def run(self, config, itr_load=None):
+    def run(self, itr_load=None):
         """
         Run training by iteratively sampling and taking an iteration.
         Args:
@@ -60,121 +59,25 @@ class GPSMain(object):
         Returns: None
         """
         itr_start = self._initialize(itr_load)
-        position_train = self.data_logger.unpickle('./position/position_train.pkl')
-        T = self.algorithm.T
-        N = self._hyperparams['num_samples']
-        dU = self.algorithm.dU
-        for num_pos in range(position_train.shape[0]):
-            """ load train position and reset agent model. """
+
+        for itr in range(itr_start, self._hyperparams['iterations']):
             for cond in self._train_idx:
-                self._hyperparams['agent']['pos_body_offset'][cond] = position_train[num_pos]
-            self.agent.reset_model(self._hyperparams)
+                for i in range(self._hyperparams['num_samples']):
+                    self._take_sample(itr, cond, i)
 
-            # initial train array
-            train_prc = np.zeros((0, T, dU, dU))
-            train_mu = np.zeros((0, T, dU))
-            train_obs_data = np.zeros((0, T, self.algorithm.dO))
-            train_wt = np.zeros((0, T))
+            traj_sample_lists = [
+                self.agent.get_samples(cond, -self._hyperparams['num_samples'])
+                for cond in self._train_idx
+            ]
 
-            # initial variables
-            count_suc = 0
+            self._take_iteration(itr, traj_sample_lists)
+            pol_sample_lists = self._take_policy_samples()
 
-            for itr in range(itr_start, self._hyperparams['iterations']):
-                print('******************num_pos:************', num_pos)
-                print('______________________itr:____________', itr)
-                for cond in self._train_idx:
-                    for i in range(self._hyperparams['num_samples']):
-                        self._take_sample(itr, cond, i)
-                        """
-                        in the first pos, it has not opt policy
-                        in the first iteration, it has not fitting samples
-                        """
-                        if num_pos == 0:
-                            self._take_sample(itr, cond, i)
-                        elif itr == 0:
-                            self._take_sample(itr, cond, i)
-                        else:
-                            # acting with merge controller
-                            self._take_sample(itr, cond, i)
+            # Clear agent samples.
+            self.agent.clear_samples()
 
-                traj_sample_lists = [
-                    self.agent.get_samples(cond, -self._hyperparams['num_samples'])
-                    for cond in self._train_idx
-                ]
-
-                # calculate the distance of  the end-effector to target position
-                ee_pos = self.agent.get_ee_pos(cond)[:3]
-                target_pos = self.agent._hyperparams['target_ee_pos'][:3]
-                distance_pos = ee_pos - target_pos
-                distance_ee = np.sqrt(distance_pos.dot(distance_pos))
-                print('distance ee:', distance_ee)
-
-                # collect the successful sample to train global policy
-                if distance_ee <= 0.06:
-                    count_suc += 1
-                    tgt_mu, tgt_prc, obs_data, tgt_wt = self.train_prepare(traj_sample_lists)
-                    train_mu = np.concatenate((train_mu, tgt_mu))
-                    train_prc = np.concatenate((train_prc, tgt_prc))
-                    train_obs_data = np.concatenate((train_obs_data, obs_data))
-                    train_wt = np.concatenate((train_wt, tgt_wt))
-
-                # Clear agent samples.
-                self.agent.clear_samples()
-
-                # if get enough sample, then break
-                if count_suc > 8:
-                    break
-
-                self._take_iteration(itr, traj_sample_lists)
-                # pol_sample_lists = self._take_policy_samples()
-                # self._log_data(itr, traj_sample_lists, pol_sample_lists)
-
-            # train NN with good samples
-            self.algorithm.policy_opt.update(train_obs_data, train_mu, train_prc, train_wt)
-            # test the trained in the current position
-            self.test_current_policy()
-            # reset the algorithm to the initial algorithm for the next position
-            self.algorithm.reset_alg()
 
         self._end()
-
-    def train_prepare(self, sample_lists):
-        """
-        prepare the train data of the sample lists
-        Args:
-            sample_lists: sample list from agent
-
-        Returns:
-            target mu, prc, obs_data, wt
-
-        """
-        algorithm = self.algorithm
-        dU, dO, T = algorithm.dU, algorithm.dO, algorithm.T
-        obs_data, tgt_mu = np.zeros((0, T, dO)), np.zeros((0, T, dU))
-        tgt_prc = np.zeros((0, T, dU, dU))
-        tgt_wt = np.zeros((0, T))
-        wt_origin = 0.01 * np.ones(T)
-        for m in range(algorithm.M):
-            samples = sample_lists[m]
-            X = samples.get_X()
-            N = len(samples)
-            prc = np.zeros((N, T, dU, dU))
-            mu = np.zeros((N, T, dU))
-            wt = np.zeros((N, T))
-
-            traj = algorithm.cur[m].traj_distr
-            for t in range(T):
-                prc[:, t, :, :] = np.tile(traj.inv_pol_covar[t, :, :],
-                                          [N, 1, 1])
-                for i in range(N):
-                    mu[i, t, :] = (traj.K[t, :, :].dot(X[i, t, :]) + traj.k[t, :])
-                wt[:, t].fill(wt_origin[t])
-            tgt_mu = np.concatenate((tgt_mu, mu))
-            tgt_prc = np.concatenate((tgt_prc, prc))
-            obs_data = np.concatenate((obs_data, samples.get_obs()))
-            tgt_wt = np.concatenate((tgt_wt, wt))
-
-        return tgt_mu, tgt_prc, obs_data, tgt_wt
 
     def test_policy(self, itr, N):
         """
@@ -329,19 +232,6 @@ class GPSMain(object):
                 self.algorithm.policy_opt.policy, self._test_idx[cond],
                 verbose=verbose, save=False, noisy=False)
         return [SampleList(samples) for samples in pol_samples]
-
-    def test_current_policy(self):
-        """
-        test the current NN policy in the current position
-        Returns:
-
-        """
-        verbose = self._hyperparams['verbose_policy_trials']
-        for cond in self._train_idx:
-            samples = self.agent.sample(
-                self.algorithm.policy_opt.policy, cond,
-                verbose=verbose, save=False, noisy=False
-            )
 
     def _log_data(self, itr, traj_sample_lists, pol_sample_lists=None):
         """
@@ -513,7 +403,7 @@ def main():
             plt.ioff()
             plt.show()
         else:
-            gps.run(hyperparams.config, itr_load=resume_training_itr)
+            gps.run(itr_load=resume_training_itr)
 
 
 if __name__ == "__main__":
