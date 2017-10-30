@@ -64,7 +64,7 @@ class PolicyOptTf(PolicyOpt):
         self.var_lists_pre = [] # variables of previous NN
         self.lam = np.zeros(0)
 
-        self.path_name = '/home/work/work/gps_imporve/ocfgps/position/'
+        self.path_name = '/home/sun/work/gps/position/'
 
         """ init graph"""
         self.sess = tf.Session()
@@ -177,20 +177,21 @@ class PolicyOptTf(PolicyOpt):
     #         self.F_mat[v] /= num_samples
     #     self.fisher_info.append(self.F_mat)
 
-    def compute_traj_fisher(self):
+    def compute_traj_fisher(self, traj_obs=None):
         """ compute a trajectory fisher information"""
 
         """ load trajectory data"""
-        print('num_task:', self.num_task)
-        traj_obs = np.load(self.path_name + 'good_trajectory_obs_%d.npy' % self.num_task)
-        traj_K = np.load(self.path_name + 'good_trajectory_K_%d.npy' % self.num_task)
-        traj_k = np.load(self.path_name + '/good_trajectory_k_%d.npy' % self.num_task)
-        traj_covar = np.load(self.path_name + '/good_trajectory_covar_%d.npy' % self.num_task)
+        if traj_obs is None:
+            print('num_task:', self.num_task)
+            traj_obs = np.load(self.path_name + 'good_trajectory_obs_%d.npy' % self.num_task)
+            # traj_K = np.load(self.path_name + 'good_trajectory_K_%d.npy' % self.num_task)
+            # traj_k = np.load(self.path_name + '/good_trajectory_k_%d.npy' % self.num_task)
+            # traj_covar = np.load(self.path_name + '/good_trajectory_covar_%d.npy' % self.num_task)
 
         traj_obs = np.float32(traj_obs)
-        traj_K = np.float32(traj_K)
-        traj_k = np.float32(traj_k)
-        traj_covar = np.float32(traj_covar)
+        # traj_K = np.float32(traj_K)
+        # traj_k = np.float32(traj_k)
+        # traj_covar = np.float32(traj_covar)
 
 
 
@@ -203,6 +204,7 @@ class PolicyOptTf(PolicyOpt):
 
         F_prev = copy.deepcopy(self.F_mat)
         abs_grad = copy.deepcopy(self.F_mat)
+        F_cur = copy.deepcopy(self.F_mat)
         mean_diffs = np.zeros(0)
         ax_len = np.zeros(0)
 
@@ -217,8 +219,7 @@ class PolicyOptTf(PolicyOpt):
         save_ders = []
         save_action = np.zeros(0)
         save_prob = np.zeros(0)
-        # num_temp = self.act_op.get_shape()[1]
-        save_fisher = [copy.deepcopy(self.F_mat)] * self.act_op.get_shape()[1]
+        total_fisher = []
 
         # calculate the fisher information with samples
         import time
@@ -302,6 +303,7 @@ class PolicyOptTf(PolicyOpt):
                     gradient_square = np.square(ders_list[num_act][v])
                     max_fisher_value = np.maximum(max_fisher_value, gradient_square)
                 self.F_mat[v] += max_fisher_value * weight_fisher
+                F_cur[v] = max_fisher_value
 
             """ compute sum of gradient and then square"""
             # for v in range(len(self.F_mat)):
@@ -309,6 +311,9 @@ class PolicyOptTf(PolicyOpt):
             #         ders_list[0][v] += ders_list[num_act][v]
             #         save_fisher[num_act][v] += np.square(ders_list[num_act][v] / len(ders_list))
             #     self.F_mat[v] += np.square(ders_list[0][v] / len(ders_list))
+
+            ####### save F_mat for each obs
+            total_fisher.append(copy.deepcopy(F_cur))
 
             # prepare for plot
             F_diff = 0
@@ -329,20 +334,74 @@ class PolicyOptTf(PolicyOpt):
 
         """ save data"""
 
-        pickle.dump(save_ders, open(self.path_name + 'gradient.pkl', 'wb'))
-        pickle.dump(save_action, open(self.path_name + 'action.pkl', 'wb'))
-        pickle.dump(save_prob, open(self.path_name + 'prob.pkl', 'wb'))
+        # pickle.dump(save_ders, open(self.path_name + 'gradient.pkl', 'wb'))
+        # pickle.dump(save_action, open(self.path_name + 'action.pkl', 'wb'))
+        # pickle.dump(save_prob, open(self.path_name + 'prob.pkl', 'wb'))
+
+        fisher_init = total_fisher[0]
+        for num_samples in range(len(total_fisher)):
+            fisher = total_fisher[num_samples]
+            each_weight = []
+            for v in range(len(fisher_init)):
+                mean_value = np.mean(fisher_init[v] - fisher_init[v])
+                each_weight.append(mean_value)
+            print('weight mean differ:', each_weight)
 
         """ attain fisher information for each task"""
         for v in range(len(self.F_mat)):
             self.F_mat[v] /= num_samples
-        self.fisher_info.append(self.F_mat)
+        self.fisher_info.append(copy.deepcopy(self.F_mat))
         pickle.dump(self.F_mat, open(self.path_name + 'fisher_%d.pkl' % self.num_task, 'wb'))
         pickle.dump(self.fisher_info, open(self.path_name + 'fisher_info_%d.pkl' % self.num_task, 'wb'))
+        pickle.dump(total_fisher, open(self.path_name + 'total_fisher_%d.pkl' % self.num_task, 'wb'))
         """ save var list used to compare with fisher information"""
         pickle.dump(self.sess.run(self.var_lists), open(self.path_name + 'var_lists_%d.pkl' % self.num_task, 'wb'))
 
         self.num_task = self.num_task +1
+
+    def compute_fisher_only(self, traj_obs):
+        """ only compute fisher and doesn't not save anything"""
+        traj_obs = np.float32(traj_obs)
+        num_samples = traj_obs.shape[0]
+        F_mat = []
+        for v in range(len(self.var_lists)):
+            F_mat.append(np.zeros(self.var_lists[v].get_shape().as_list()))
+
+        import time
+        for i in range(num_samples):
+            # for i in range(3):
+
+            idx = [i]
+            ders_list = []
+            time_start = time.time()
+
+            probs = self.act_op
+
+            for act_dim in range(self.act_op.get_shape()[1]):
+                probs_alter = probs[0, act_dim]
+                probs_gradient = self.sess.run(tf.gradients(probs_alter, self.var_lists),
+                                               feed_dict={self.obs_tensor: traj_obs[idx]})
+                ders_list.append(probs_gradient)
+            time_end = time.time()
+            print('compute %d..., time is %f s' % (i, (time_end - time_start)))
+
+            """ compute fisher information"""
+            # for v in range(len(self.F_mat)):
+            #     for num_act in range(len(ders_list)):
+            #         save_fisher[num_act][v] += np.square(ders_list[num_act][v] / len(ders_list))
+            #         # save the absolute gradients
+            #         self.F_mat[v] += np.square(ders_list[num_act][v]) / len(ders_list)
+
+            """ compute using max value of each action"""
+            weight_fisher = 1
+            for v in range(len(F_mat)):
+                max_fisher_value = np.full(F_mat[v].shape, -np.inf)
+                for num_act in range(len(ders_list)):
+                    gradient_square = np.square(ders_list[num_act][v])
+                    max_fisher_value = np.maximum(max_fisher_value, gradient_square)
+                F_mat[v] += max_fisher_value * weight_fisher
+
+        return F_mat
 
     def keep_pre_vars(self):
         self.var_lists_pre = []
@@ -531,11 +590,17 @@ class PolicyOptTf(PolicyOpt):
         else:
             self.var_saver.save(self.sess, self.path_name + 'var_list.ckpt')
 
+    def save_ckpt(self, path):
+        self.saver.save(self.sess, path)
+
+    def restore_ckpt(self, path):
+        self.saver.restore(self.sess, path)
+
     def reset_iteration(self, itr):
         self.iteration = itr
 
     def update_ewc(self, obs, tgt_mu, tgt_prc, tgt_wt, lam,
-                   with_ewc=False, compute_fisher=False, with_traj=False):
+                   with_ewc=False, compute_fisher=False, with_traj=True):
         """
         Update policy with ewc loss
         Args:
@@ -680,24 +745,27 @@ class PolicyOptTf(PolicyOpt):
                             i + 1, average_loss / 50)
                 LOGGER.info('average nature loss: %f', average_loss_nature / 50)
                 LOGGER.info('learning rate: %f', self.sess.run(self.learning_rate))
-                if average_loss_nature < 4*50:
+                if average_loss_nature < 1*50:
                     break
+                # if with_ewc:
+                #     if len(self.fisher_info) > 0:
+                #         fisher_value = tf.constant(0, dtype=tf.float32)
+                #         for num_task in range(len(self.fisher_info)):
+                #             for v in range(len(self.var_lists)):
+                #                 fisher_value += tf.reduce_sum(tf.multiply(self.fisher_info[num_task][v].astype(np.float32),
+                #                                                           tf.square(self.var_lists[v] -
+                #                                                                     self.var_lists_pre[num_task][v])))
+                #                 # fisher_value += tf.reduce_sum(tf.multiply(self.fisher_info[num_task][v].astype(np.float32),
+                #                 #                                           tf.square(self.var_lists[v] -
+                #                 #                                                     self.var_lists_pre[2][v])))
+                #                 # fisher_value += tf.reduce_sum(tf.multiply(self.fisher_info[num_task][v].astype(np.float32),
+                #                 #                                           tf.square(self.var_lists[v] -
+                #                 #                                                     self.star_var[v])))
+                #         LOGGER.info('fisher value: %f', self.sess.run(fisher_value))
 
-                if len(self.fisher_info) > 0:
-                    fisher_value = tf.constant(0, dtype=tf.float32)
-                    for num_task in range(len(self.fisher_info)):
-                        for v in range(len(self.var_lists)):
-                            fisher_value += tf.reduce_sum(tf.multiply(self.fisher_info[num_task][v].astype(np.float32),
-                                                                      tf.square(self.var_lists[v] -
-                                                                                self.var_lists_pre[num_task][v])))
-                            # fisher_value += tf.reduce_sum(tf.multiply(self.fisher_info[num_task][v].astype(np.float32),
-                            #                                           tf.square(self.var_lists[v] -
-                            #                                                     self.star_var[v])))
-                    LOGGER.info('fisher value: %f', fisher_value)
-
-                    # """ print loss differents"""
-                    # loss_ewc = self.sess.run(self.solver.ewc_loss, feed_dict=feed_dict)
-                    # print('loss difference:', loss_ewc - loss_nature)
+                        # """ print loss differents"""
+                        # loss_ewc = self.sess.run(self.solver.ewc_loss, feed_dict=feed_dict)
+                        # print('loss difference:', loss_ewc - loss_nature)
 
                 average_loss = 0
                 average_loss_nature = 0
@@ -720,6 +788,7 @@ class PolicyOptTf(PolicyOpt):
 
         print('computing fisher information .......')
         if compute_fisher:
+            # self.compute_traj_fisher()
             if with_traj:
                 self.compute_traj_fisher()
             else:
@@ -828,7 +897,7 @@ class PolicyOptTf(PolicyOpt):
         self.decay_step.assign(0)
         self.learning_rate = tf.train.exponential_decay(0.01, global_step=self.decay_step,
                                                         decay_steps=500,
-                                                        decay_rate=0.8)
+                                                        decay_rate=0.9)
     def restore_trained_policy(self, num_task):
         """ restore the policy trained at num_task position"""
         self.restore(num_task)
@@ -846,5 +915,4 @@ class PolicyOptTf(PolicyOpt):
         for i in range(num_task + 1):
             self.var_lists_pre.append(pickle.load(open(self.path_name + 'var_lists_%d.pkl' % i, 'rb')))
         self.num_task = num_task + 1
-
 
