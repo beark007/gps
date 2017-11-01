@@ -12,6 +12,7 @@ from gps.algorithm.algorithm_olgps import AlgorithmOLGPS
 from gps.algorithm.cost.cost_state import CostState
 from gps.algorithm.cost.cost_action import CostAction
 from gps.algorithm.cost.cost_sum import CostSum
+from gps.algorithm.cost.cost_utils import RAMP_FINAL_ONLY
 from gps.algorithm.dynamics.dynamics_lr_prior import DynamicsLRPrior
 from gps.algorithm.dynamics.dynamics_prior_gmm import DynamicsPriorGMM
 from gps.algorithm.policy.policy_prior_gmm import PolicyPriorGMM
@@ -47,7 +48,7 @@ if not os.path.exists(common['data_files_dir']):
 
 agent = {
     'type': AgentGym,
-    'env': ['Pendulum-v0', 'Pendulum-v1', 'Pendulum-v2', 'Pendulum-v3'],
+    'env': ['Pendulum-v1', 'Pendulum-v0', 'Pendulum-v2', 'Pendulum-v3'],
     'x0': np.array([0.289, 0.3287]),
     'dt': 0.05,
     'substeps': 1,
@@ -105,10 +106,27 @@ state_cost = {
     },
 }
 
+final_cost = {
+    'type': CostState,
+    'data_types': {
+        JOINT_VELOCITIES:{
+            'wp':np.ones(SENSOR_DIMS[JOINT_VELOCITIES]),
+            'target_state': agent["target_vel"],
+        },
+        JOINT_ANGLES: {
+            'wp': np.array([10, 10]),
+            'target_state': agent["target_state"],
+        },
+    },
+    'l1': 1.0,
+    'l2': 0.0,
+    'ramp_option': RAMP_FINAL_ONLY,
+}
+
 algorithm['cost'] = {
     'type': CostSum,
-    'costs': [action_cost, state_cost],
-    'weights': [1e-5, 1.0],
+    'costs': [action_cost, state_cost, final_cost],
+    'weights': [1e-5, 1.0, 1.0],
 }
 
 algorithm['dynamics'] = {

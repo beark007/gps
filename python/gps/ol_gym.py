@@ -73,8 +73,10 @@ class GPSMain(object):
         N = self._hyperparams['num_samples']
         dU = self.algorithm.dU
 
-        err_acc = 0.03
+        exp_x_acc = 0.06
+        exp_vel_acc = 0.04
         num_good_samples = 10
+        flag_suc_peg = False
 
         text = open('temp.txt', 'w')
 
@@ -101,18 +103,17 @@ class GPSMain(object):
                     ]
 
                     sample = traj_sample_lists[0][0]
-                    end_x = sample.get_X(t=99)[0]
-                    end_vel = sample.get_X(t=99)[1]
-                    print('_____________________________________')
-                    print('point:', end_x)
-                    print('point:', end_vel)
+                    end_x = sample.get_X(t=T-1)[0]
+                    end_vel = sample.get_X(t=T-1)[1]
                     err_x = end_x - self.target_points
                     err_x = np.sqrt(err_x.dot(err_x))
-                    print("err:", err_x)
+
+                    err_vel = end_vel - self.target_vel
+                    err_vel = np.sqrt(err_vel.dot(err_vel))
 
                     self._take_iteration(itr, traj_sample_lists)
 
-                    if err_x <= err_acc:
+                    if err_x <= exp_x_acc and err_vel <= exp_vel_acc:
                         flag_suc_peg = True
                         count_suc += 1
                         tgt_mu, tgt_prc, obs_data, tgt_wt = self.train_prepare(traj_sample_lists)
@@ -154,7 +155,7 @@ class GPSMain(object):
                     if num_pos > 1:
                         lam_base.insert(0, lam_base[0] * 1)
                     else:
-                        lam_base = [1]
+                        lam_base = [1000]
 
                     if num_pos == 3:
                         self.algorithm.policy_opt.update_ewc(train_obs_data, train_mu, train_prc, train_wt, lam_base,

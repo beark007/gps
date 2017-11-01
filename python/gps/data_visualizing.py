@@ -25,10 +25,6 @@ def plot_weight(ax, weights):
         x_data = np.append(x_data, i)
 
     maker_dataset = Line2D.filled_markers
-    # color_dataset = []
-    # color_base = 1. / num_value
-    # for color in range(num_value):
-    #     color_dataset.append(str(color_base * (color+1)))
     color_dataset = ['blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black']
 
     for line in range(num_value):
@@ -310,15 +306,10 @@ def gradient_plot():
     gradient_data = data_logger.unpickle('./position/gradient.pkl')
     gradient_visualization(gradient_data)
 
-def diff_fisher_plot():
+def diff_fisher_plot(fisher_data):
     """
-    plot different fisher of l2, l1, non
+    fisher data has the form :[num_tasks*[num_layers* np.array(weights)]]
     """
-    """ load data """
-    fisher_data = []
-    fisher_data.append(data_logger.unpickle('./position/fisher/fisher_none.pkl'))
-    fisher_data.append(data_logger.unpickle('./position/fisher/fisher_l1.pkl'))
-    fisher_data.append(data_logger.unpickle('./position/fisher/fisher_l2.pkl'))
 
     """ prepare data for plot"""
     weights_data = []
@@ -345,7 +336,9 @@ def diff_fisher_plot():
     plt.show()
 
 
-diff_fisher_plot()
+if __name__ == '__main__':
+    fisher_data = data_logger.unpickle('./position/fisher_info_0.pkl')
+    diff_fisher_plot(fisher_data)
 
 
 

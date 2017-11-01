@@ -16,6 +16,7 @@ import tensorflow.contrib.distributions as ds
 from gps.algorithm.policy.tf_policy import TfPolicy
 from gps.algorithm.policy_opt.policy_opt import PolicyOpt
 from gps.algorithm.policy_opt.tf_utils import TfSolver
+from gps import data_visualizing
 
 try:
     import cPickle as pickle
@@ -334,16 +335,13 @@ class PolicyOptTf(PolicyOpt):
 
         """ save data"""
 
-        # pickle.dump(save_ders, open(self.path_name + 'gradient.pkl', 'wb'))
-        # pickle.dump(save_action, open(self.path_name + 'action.pkl', 'wb'))
-        # pickle.dump(save_prob, open(self.path_name + 'prob.pkl', 'wb'))
 
         fisher_init = total_fisher[0]
         for num_samples in range(len(total_fisher)):
             fisher = total_fisher[num_samples]
             each_weight = []
             for v in range(len(fisher_init)):
-                mean_value = np.mean(fisher_init[v] - fisher_init[v])
+                mean_value = np.mean(fisher[v] - fisher_init[v])
                 each_weight.append(mean_value)
             print('weight mean differ:', each_weight)
 
@@ -769,6 +767,23 @@ class PolicyOptTf(PolicyOpt):
 
                 average_loss = 0
                 average_loss_nature = 0
+            if self.num_task > 0:
+                if (i+1) % 50 == 0:
+                    plot_var = []
+                    plot_var += self.var_lists_pre
+                    cur_var = []
+                    if len(plot_var) > 0:
+                        diff_var = []
+                        for v in range(len(self.var_lists)):
+                            cur_var.append(self.sess.run(self.var_lists[v]))
+                            diff_var.append(plot_var[-1][v]-cur_var[v])
+                        plot_var.append(cur_var)
+                        plot_var.append(diff_var)
+                    else:
+                        for v in range(len(self.var_lists)):
+                            cur_var.append(self.sess.run(self.var_lists[v]))
+                        plot_var.append(cur_var)
+                    data_visualizing.diff_fisher_plot(plot_var)
 
         feed_dict = {self.obs_tensor: obs}
         num_values = obs.shape[0]
