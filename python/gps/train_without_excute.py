@@ -91,27 +91,40 @@ class GPSMain(object):
 
         count_compute = 0
 
-        # num_restore = 3
+        # num_restore = 2
         # self.algorithm.policy_opt.restore_trained_policy(num_restore)
         # count_compute = num_restore + 1
 
         position_train = self.data_logger.unpickle('./position/all_train_position.pkl')
         len_train = position_train.shape[0]
 
-        for num_pos in range(len_train):
+        fisher_for_compare = []
+
+        for num_pos in range(0, len_train):
             """ load data"""
             train_mu = self.data_logger.unpickle('./position/mu_%d.pkl' % num_pos)
             train_obs_data = self.data_logger.unpickle('./position/obs_%d.pkl' % num_pos)
             train_prc = self.data_logger.unpickle('./position/prc_%d.pkl' % num_pos)
             train_wt = self.data_logger.unpickle('./position/wt_%d.pkl' % num_pos)
             train_positions = self.data_logger.unpickle('./position/position_train.pkl')
-            lam_bas = 10
-            distance_bas = 0.30
+            lam_bas = 5
+            distance_bas = 0.20 # 0.30
             lam = []
             for i in range(num_pos):
                 diff_distance = (train_positions[num_pos] - train_positions[i]) / distance_bas
-                diff_sqrt_distance = np.sqrt(np.sum(np.square(diff_distance)))
-                lam.append(lam_bas * diff_sqrt_distance * 1.5)
+                # diff_sqrt_distance = np.sqrt(np.sum(np.square(diff_distance)))
+                diff_sqrt_distance = np.power(np.sum(np.square(diff_distance)), 2)
+                lam.append(lam_bas * diff_sqrt_distance * 3)
+            """
+            inverse lam and 1.1 is success on pos 1,2,4
+            """
+            for i in range(num_pos):
+                lam[i] *= np.power(1.1, num_pos - i)
+            if num_pos == len_train -1:
+                lam[0] -= 10
+                lam[1] -= 20
+                lam[-1] += 10
+            print('lam:', lam)
 
 
             """ train NN"""
@@ -119,14 +132,14 @@ class GPSMain(object):
 
             if count_compute == 0:
                 self.algorithm.policy_opt.update_ewc(train_obs_data, train_mu, train_prc, train_wt, lam,
-                                                     with_ewc=False, compute_fisher=False, with_traj=True)
+                                                     with_ewc=False, compute_fisher=True, with_traj=True)
             elif count_compute < len_train-1:
                 self.algorithm.policy_opt.update_ewc(train_obs_data, train_mu, train_prc, train_wt, lam,
-                                                     with_ewc=True, compute_fisher=False, with_traj=True)
+                                                     with_ewc=False, compute_fisher=True, with_traj=True)
             else:
                 self.algorithm.policy_opt.update_ewc(train_obs_data, train_mu, train_prc, train_wt, lam,
-                                                     with_ewc=True, compute_fisher=False, with_traj=True)
-            if count_compute == len_train-1:
+                                                     with_ewc=False, compute_fisher=True, with_traj=True)
+            if count_compute == len_train-2:
                 print('123')
 
             """ test current policy"""
@@ -144,14 +157,27 @@ class GPSMain(object):
             cost, pos_suc_count, ee_distance = self.test_cost(test_position)
 
             """ we move the compute fisher info here"""
-            if count_compute < len_train-1:
-                self.algorithm.policy_opt.compute_traj_fisher()
-            else:
-                self.algorithm.policy_opt.num_task += 1
+            # if count_compute < len_train-1:
+            #     obs_data = train_obs_data[-1]
+            #     self.algorithm.policy_opt.compute_traj_fisher(obs_data)
+            # else:
+            #     self.algorithm.policy_opt.num_task += 1
 
             self.data_logger.pickle('./position/all_distance_%d.pkl' % num_pos, ee_distance)
             self.data_logger.pickle('./position/all_cost_%d.pkl' % num_pos, cost)
             self.data_logger.pickle('./position/all_suc_count_%d.pkl' % num_pos, pos_suc_count)
+
+            """ compute fisher information in position 1"""
+            # if num_pos == 0:
+            #     fisher_for_compare.append(copy.deepcopy(self.algorithm.policy_opt.F_mat))
+            # else:
+            #     fisher_obs_data = self.data_logger.unpickle('./position/obs_0.pkl')
+            #     obs_data = fisher_obs_data[-1]
+            #     F_mat = self.algorithm.policy_opt.compute_fisher_only(obs_data)
+            #     fisher_for_compare.append(copy.deepcopy(F_mat))
+            #
+            # if num_pos > 0:
+            #     self.data_logger.pickle('./position/fisher_for_compare_%d.pkl' % num_pos, fisher_for_compare)
 
             """ save the current opt action"""
             # load traj obs

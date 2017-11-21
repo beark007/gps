@@ -274,7 +274,7 @@ class TfSolver:
         # self.ewc_loss += loss_regularization
 
         # l2_loss
-        l2_regularization = tf_layers.l2_regularizer(scale=0.05, scope='l2_regularization')
+        l2_regularization = tf_layers.l2_regularizer(scale=0.02, scope='l2_regularization')
         loss_regularization = tf_layers.apply_regularization(l2_regularization, var_regular)
         self.ewc_loss += loss_regularization
 

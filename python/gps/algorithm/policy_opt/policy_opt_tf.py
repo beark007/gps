@@ -16,7 +16,6 @@ import tensorflow.contrib.distributions as ds
 from gps.algorithm.policy.tf_policy import TfPolicy
 from gps.algorithm.policy_opt.policy_opt import PolicyOpt
 from gps.algorithm.policy_opt.tf_utils import TfSolver
-from gps import data_visualizing
 
 try:
     import cPickle as pickle
@@ -65,7 +64,7 @@ class PolicyOptTf(PolicyOpt):
         self.var_lists_pre = [] # variables of previous NN
         self.lam = np.zeros(0)
 
-        self.path_name = '/home/sun/work/gps/position/'
+        self.path_name = '/home/sun/work/ocfgps/position/'
 
         """ init graph"""
         self.sess = tf.Session()
@@ -178,7 +177,7 @@ class PolicyOptTf(PolicyOpt):
     #         self.F_mat[v] /= num_samples
     #     self.fisher_info.append(self.F_mat)
 
-    def compute_traj_fisher(self, traj_obs=None):
+    def compute_traj_fisher(self, traj_obs=None, with_ewc=True):
         """ compute a trajectory fisher information"""
 
         """ load trajectory data"""
@@ -335,25 +334,37 @@ class PolicyOptTf(PolicyOpt):
 
         """ save data"""
 
+        # pickle.dump(save_ders, open(self.path_name + 'gradient.pkl', 'wb'))
+        # pickle.dump(save_action, open(self.path_name + 'action.pkl', 'wb'))
+        # pickle.dump(save_prob, open(self.path_name + 'prob.pkl', 'wb'))
 
         fisher_init = total_fisher[0]
         for num_samples in range(len(total_fisher)):
             fisher = total_fisher[num_samples]
             each_weight = []
             for v in range(len(fisher_init)):
-                mean_value = np.mean(fisher[v] - fisher_init[v])
+                mean_value = np.mean(fisher_init[v] - fisher_init[v])
                 each_weight.append(mean_value)
             print('weight mean differ:', each_weight)
 
         """ attain fisher information for each task"""
-        for v in range(len(self.F_mat)):
-            self.F_mat[v] /= num_samples
-        self.fisher_info.append(copy.deepcopy(self.F_mat))
-        pickle.dump(self.F_mat, open(self.path_name + 'fisher_%d.pkl' % self.num_task, 'wb'))
-        pickle.dump(self.fisher_info, open(self.path_name + 'fisher_info_%d.pkl' % self.num_task, 'wb'))
-        pickle.dump(total_fisher, open(self.path_name + 'total_fisher_%d.pkl' % self.num_task, 'wb'))
+        if with_ewc:
+            for v in range(len(self.F_mat)):
+                self.F_mat[v] /= num_samples
+            self.fisher_info.append(copy.deepcopy(self.F_mat))
+            pickle.dump(self.F_mat, open(self.path_name + 'fisher_ewc_%d.pkl' % self.num_task, 'wb'))
+            pickle.dump(self.fisher_info, open(self.path_name + 'fisher_info_ewc_%d.pkl' % self.num_task, 'wb'))
+            pickle.dump(total_fisher, open(self.path_name + 'total_fisher_ewc_%d.pkl' % self.num_task, 'wb'))
+        else:
+            for v in range(len(self.F_mat)):
+                self.F_mat[v] /= num_samples
+            self.fisher_info.append(copy.deepcopy(self.F_mat))
+            pickle.dump(self.F_mat, open(self.path_name + 'fisher_%d.pkl' % self.num_task, 'wb'))
+            pickle.dump(self.fisher_info, open(self.path_name + 'fisher_info_%d.pkl' % self.num_task, 'wb'))
+            pickle.dump(total_fisher, open(self.path_name + 'total_fisher_%d.pkl' % self.num_task, 'wb'))
+
         """ save var list used to compare with fisher information"""
-        pickle.dump(self.sess.run(self.var_lists), open(self.path_name + 'var_lists_%d.pkl' % self.num_task, 'wb'))
+        # pickle.dump(self.sess.run(self.var_lists), open(self.path_name + 'var_lists_%d.pkl' % self.num_task, 'wb'))
 
         self.num_task = self.num_task +1
 
@@ -588,17 +599,22 @@ class PolicyOptTf(PolicyOpt):
         else:
             self.var_saver.save(self.sess, self.path_name + 'var_list.ckpt')
 
-    def save_ckpt(self, path):
-        self.saver.save(self.sess, path)
-
-    def restore_ckpt(self, path):
-        self.saver.restore(self.sess, path)
-
     def reset_iteration(self, itr):
         self.iteration = itr
 
+    def save_weights(self, ewc=False):
+        """
+        save weights as pkl file
+        :return:
+        """
+        if ewc:
+            pickle.dump(self.sess.run(self.var_lists), open(self.path_name + 'var_lists_ewc_%d.pkl' % self.num_task, 'wb'))
+        else:
+            pickle.dump(self.sess.run(self.var_lists),
+                        open(self.path_name + 'var_lists_%d.pkl' % self.num_task, 'wb'))
+
     def update_ewc(self, obs, tgt_mu, tgt_prc, tgt_wt, lam,
-                   with_ewc=False, compute_fisher=False, with_traj=True):
+                   with_ewc=False, compute_fisher=False, with_traj=False):
         """
         Update policy with ewc loss
         Args:
@@ -625,6 +641,8 @@ class PolicyOptTf(PolicyOpt):
             self.restore()
         else:
             self.save_variable()
+            if self.num_task > 0:
+                self.start()
             self.reset_lr()
             self.solver.update_loss(var_lists=self.var_lists)
             self.solver.solver_op = self.solver.reset_solver_op(loss=self.solver.ewc_loss,
@@ -767,23 +785,6 @@ class PolicyOptTf(PolicyOpt):
 
                 average_loss = 0
                 average_loss_nature = 0
-            if self.num_task > 0:
-                if (i+1) % 50 == 0:
-                    plot_var = []
-                    plot_var += self.var_lists_pre
-                    cur_var = []
-                    if len(plot_var) > 0:
-                        diff_var = []
-                        for v in range(len(self.var_lists)):
-                            cur_var.append(self.sess.run(self.var_lists[v]))
-                            diff_var.append(plot_var[-1][v]-cur_var[v])
-                        plot_var.append(cur_var)
-                        plot_var.append(diff_var)
-                    else:
-                        for v in range(len(self.var_lists)):
-                            cur_var.append(self.sess.run(self.var_lists[v]))
-                        plot_var.append(cur_var)
-                    data_visualizing.diff_fisher_plot(plot_var)
 
         feed_dict = {self.obs_tensor: obs}
         num_values = obs.shape[0]
@@ -802,12 +803,12 @@ class PolicyOptTf(PolicyOpt):
         self.policy.chol_pol_covar = np.diag(np.sqrt(self.var))
 
         print('computing fisher information .......')
-        if compute_fisher:
-            # self.compute_traj_fisher()
-            if with_traj:
-                self.compute_traj_fisher()
-            else:
-                self.compute_fisher_info(obs, idx)
+        # if compute_fisher:
+        #     if with_traj:
+        #         self.compute_traj_fisher(compute_fisher)
+        #     else:
+        #         self.compute_fisher_info(obs, idx)
+        self.compute_traj_fisher(with_ewc=compute_fisher)
 
         """ save varibles """
         self.save_variable(self.num_task)
@@ -819,6 +820,8 @@ class PolicyOptTf(PolicyOpt):
         policy_var.append(policy.scale)
         policy_var.append(policy.x_idx)
         pickle.dump(policy_var, open(self.path_name + 'policy_var_%d.pkl' % self.num_task, 'wb'))
+
+        self.save_weights(compute_fisher)
 
 
         return self.policy
@@ -930,4 +933,5 @@ class PolicyOptTf(PolicyOpt):
         for i in range(num_task + 1):
             self.var_lists_pre.append(pickle.load(open(self.path_name + 'var_lists_%d.pkl' % i, 'rb')))
         self.num_task = num_task + 1
+
 
